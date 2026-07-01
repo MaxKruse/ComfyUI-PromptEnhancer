@@ -1,0 +1,2 @@
+# No additional Python dependencies beyond ComfyUI core.
+# Requires: llama-server binary (from llama.cpp) and a GGUF model file.

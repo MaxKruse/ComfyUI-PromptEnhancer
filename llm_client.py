@@ -115,7 +115,7 @@ def build_command(
     ]
 
     if not _user_set_ctx(user_flags):
-        cmd.extend(["-c", "32000"])
+        cmd.extend(["-c", "16000"])
 
     cmd.extend(user_flags)
     return cmd

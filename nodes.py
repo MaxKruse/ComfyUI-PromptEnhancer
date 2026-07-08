@@ -1,9 +1,6 @@
 """ComfyUI custom nodes for LLM-powered prompt enhancement via llama-server.
 
-Supports multiple target models:
-  - LTX 2.3 Text-to-Video (ltx-t2v)
-  - LTX 2.3 Image-to-Video (ltx-i2v)
-  - KREA-2 Text-to-Image (krea2-t2i)
+Supports KREA-2 Text-to-Image (krea2-t2i).
 
 The target model is determined automatically from the selected preset.
 """
@@ -39,7 +36,7 @@ DEFAULT_MODEL_PATH = (
 )
 
 # Default llama-server flags matching ~/.llama-cpp.ini
-DEFAULT_EXTRA_FLAGS = "--no-mmap --threads 12 -ngl 99"
+DEFAULT_EXTRA_FLAGS = "--no-mmap --threads 12 -c 16000"
 
 
 def _get_comfy_base_path() -> str:
@@ -95,7 +92,7 @@ def _get_default_preset_display(display_to_key: dict) -> str:
 class PromptEnhancer:
     """Enhance a prompt using a local LLM (llama-server).
 
-    Supports multiple target models (LTX 2.3, KREA-2) via presets.
+    Supports KREA-2 Text-to-Image via presets.
     The target model is determined by the selected preset.
 
     This node:
@@ -130,7 +127,7 @@ class PromptEnhancer:
                     {
                         "tooltip": (
                             "System prompt preset that guides how the LLM enhances your prompt.\n"
-                            "The target model (LTX T2V/I2V, KREA 2) is determined by the preset."
+                            "The target model (KREA 2) is determined by the preset."
                         ),
                     },
                 ),
@@ -260,7 +257,7 @@ class PromptEnhancer:
     CATEGORY = "Prompt Enhancer"
     DESCRIPTION = (
         "Enhance prompts using a local LLM via llama-server. "
-        "Supports LTX 2.3 (T2V/I2V) and KREA-2 (T2I) via presets. "
+        "Supports KREA-2 (T2I) via presets. "
         "Unloads models, runs LLM with retry loop, returns unique enhanced prompt."
     )
 

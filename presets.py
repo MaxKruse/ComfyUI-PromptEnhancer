@@ -1,9 +1,8 @@
 """Preset file discovery and loading for prompt enhancement system prompts.
 
 Presets are organized by target model prefix:
-  - ltx-t2v-*   : LTX 2.3 text-to-video presets
-  - ltx-i2v-*   : LTX 2.3 image-to-video presets
   - krea2-t2i-* : KREA-2 text-to-image presets
+  - ltx2.3-10eros-i2v-* : LTX 2.3 10Eros image-to-video presets
 """
 
 from __future__ import annotations
@@ -24,20 +23,17 @@ class PresetInfo(NamedTuple):
 
 # Mapping of target_model prefixes to their human-readable labels.
 TARGET_MODEL_LABELS: dict[str, str] = {
-    "ltx-t2v": "LTX 2.3 T2V",
-    "ltx-i2v": "LTX 2.3 I2V",
     "krea2-t2i": "KREA 2 T2I",
+    "ltx2.3-10eros-i2v": "LTX 2.3 10Eros I2V",
 }
 
 # Mapping from preset key -> display suffix (the part after the target prefix).
 # Add new entries here when adding preset files.
 _PRESET_DISPLAY_NAMES: dict[str, str] = {
-    "ltx-t2v-cinematic": "Cinematic",
-    "ltx-t2v-nsfw": "NSFW",
-    "ltx-i2v-motion": "Motion",
-    "ltx-i2v-nsfw": "NSFW",
     "krea2-t2i": "General",
     "krea2-t2i-nsfw": "NSFW",
+    "ltx2.3-10eros-i2v": "General",
+    "ltx2.3-10eros-i2v-nsfw": "NSFW",
 }
 
 

@@ -1,19 +1,19 @@
 # ComfyUI Prompt Enhancer
 
-LLM-powered prompt enhancement for **LTX 2.3** video generation and **KREA-2** image generation, using [llama.cpp](https://github.com/ggerganov/llama.cpp)'s `llama-server` HTTP API.
+LLM-powered prompt enhancement for **KREA-2** image generation, using [llama.cpp](https://github.com/ggerganov/llama.cpp)'s `llama-server` HTTP API.
 
 Drop this into your `custom_nodes/` directory. No API keys needed - runs entirely local.
 
 ## Features
 
-- **Multi-model support**: LTX 2.3 (T2V/I2V) and KREA-2 (T2I) target models
+- **KREA-2 support**: KREA-2 (T2I) target model
 - **Single preset dropdown**: Choose your preset - the target model is determined automatically
 - **VRAM-aware**: Automatically unloads ComfyUI models before spawning llama-server, then frees memory after
-- **Retry loop**: Keeps trying with different seeds until a quality, unique prompt is generated
+- **Retry loop**: Keeps trying until a quality, unique prompt is generated
 - **Quality validation**: Rejects refusals, short outputs, and prompts too similar to the original
 - **Sampling control**: `top_p`, `top_k`, `min_p` support for fine-tuned generation
 - **Reasoning model support**: `max_tokens` defaults to 4096 to accommodate thinking tokens
-- **Preset system**: 6 built-in presets across LTX and KREA-2 categories
+- **Preset system**: 2 built-in presets for KREA-2
 - **LoRA context**: Include LoRA info directly in your prompt - the LLM incorporates it naturally
 - **Batch mode**: Enhance multiple prompts sequentially
 
@@ -45,9 +45,8 @@ Single prompt enhancement with retry loop.
 | `top_p` | Float | 0.1-1.0 (default: 0.95) |
 | `top_k` | Int | 1-200 (default: 64) |
 | `min_p` | Float | 0.0-1.0 (default: 0.01) |
-| `seed` | Int | -1 = random, fixed = reproducible |
 | `max_retries` | Int | 1-20 (default: 5) |
-| `reference_image` | Image | Optional reference image for I2V presets |
+| `reference_image` | Image | Optional reference image |
 | `extra_flags` | String | Extra llama-server flags (e.g., `-ngl 99 --mlock`) |
 
 **Output:** `enhanced_prompt` - the LLM-enhanced prompt
@@ -62,14 +61,10 @@ The preset dropdown shows all available presets with clear labels that include t
 
 | Display Name | Target Model | Description |
 |--------------|--------------|-------------|
-| `LTX 2.3 I2V - Motion` | LTX 2.3 Image-to-Video | Motion descriptions that complement a source image |
-| `LTX 2.3 I2V - NSFW` | LTX 2.3 Image-to-Video | Explicit, uncensored image-to-video motion prompts |
-| `LTX 2.3 T2V - Cinematic` | LTX 2.3 Text-to-Video | Cinematic prompts with camera direction |
-| `LTX 2.3 T2V - NSFW` | LTX 2.3 Text-to-Video | Explicit, uncensored text-to-video prompts |
 | `KREA 2 T2I - General` | KREA-2 Text-to-Image | Detailed image prompts based on [KREA-2 guidelines](https://github.com/krea-ai/krea-2/blob/main/docs/prompting.md) |
 | `KREA 2 T2I - NSFW` | KREA-2 Text-to-Image | Explicit, uncensored text-to-image prompts |
 
-Custom presets: Add `.txt` files to the `presets/` directory. Use the naming convention `<target>-<name>.txt` (e.g., `ltx-t2v-anime.txt`, `krea2-t2i-portrait.txt`).
+Custom presets: Add `.txt` files to the `presets/` directory. Use the naming convention `<target>-<name>.txt` (e.g., `krea2-t2i-portrait.txt`).
 
 ## LoRA Context
 
@@ -85,20 +80,6 @@ Character has pink twin-tails, blue eyes, wears a red school uniform
 The LLM naturally incorporates this context into the enhanced prompt.
 
 ## Example Workflows
-
-### LTX 2.3 Text-to-Video
-
-```
-[CLIP Text Encode] -> [PromptEnhancer (preset: LTX 2.3 T2V - Cinematic)] -> [LTXVideoSampler]
-```
-
-### LTX 2.3 Image-to-Video
-
-```
-[Load Image] -> [PromptEnhancer (preset: LTX 2.3 I2V - Motion)] -> [LTXVideoSampler]
-```
-
-Reference image can be connected to the `reference_image` input for I2V presets.
 
 ### KREA-2 Text-to-Image
 

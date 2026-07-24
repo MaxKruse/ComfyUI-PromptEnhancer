@@ -4,22 +4,6 @@ import pytest
 from presets import list_presets, load_preset, get_default_preset, get_preset_by_key, TARGET_MODEL_LABELS
 
 
-def test_ltx_t2v_cinematic_preset_exists():
-    """LTX T2V cinematic preset should exist."""
-    content = load_preset("ltx-t2v-cinematic")
-    assert content is not None
-    assert len(content) > 100
-    assert "LTX 2.3" in content
-
-
-def test_ltx_i2v_motion_preset_exists():
-    """LTX I2V motion preset should exist."""
-    content = load_preset("ltx-i2v-motion")
-    assert content is not None
-    assert len(content) > 100
-    assert "I2V" in content
-
-
 def test_krea2_t2i_preset_exists():
     """KREA-2 text-to-image preset should exist."""
     content = load_preset("krea2-t2i")
@@ -36,17 +20,22 @@ def test_krea2_t2i_preset_has_expansion_content():
     assert "text-to-image" in content.lower()
 
 
+def test_krea2_t2i_nsfw_preset_exists():
+    """KREA-2 NSFW preset should exist."""
+    content = load_preset("krea2-t2i-nsfw")
+    assert content is not None
+    assert len(content) > 100
+
+
 def test_target_model_labels_complete():
     """Target model labels should cover all supported models."""
-    assert "ltx-t2v" in TARGET_MODEL_LABELS
-    assert "ltx-i2v" in TARGET_MODEL_LABELS
     assert "krea2-t2i" in TARGET_MODEL_LABELS
 
 
 def test_list_presets_returns_named_tuples():
     """list_presets should return PresetInfo named tuples."""
     presets = list_presets()
-    assert len(presets) >= 5
+    assert len(presets) >= 2
 
     for p in presets:
         assert hasattr(p, "key")
@@ -79,24 +68,6 @@ def test_preset_display_names_are_unique():
     assert len(names) == len(set(names)), f"Duplicate display names found: {names}"
 
 
-def test_ltx_t2v_presets_have_correct_target():
-    """LTX T2V presets should derive target_model=ltx-t2v."""
-    presets = list_presets()
-    t2v_presets = [p for p in presets if p.key.startswith("ltx-t2v-")]
-    assert len(t2v_presets) > 0
-    for p in t2v_presets:
-        assert p.target_model == "ltx-t2v"
-
-
-def test_ltx_i2v_presets_have_correct_target():
-    """LTX I2V presets should derive target_model=ltx-i2v."""
-    presets = list_presets()
-    i2v_presets = [p for p in presets if p.key.startswith("ltx-i2v-")]
-    assert len(i2v_presets) > 0
-    for p in i2v_presets:
-        assert p.target_model == "ltx-i2v"
-
-
 def test_krea2_presets_have_correct_target():
     """KREA-2 presets should derive target_model=krea2-t2i."""
     presets = list_presets()
@@ -108,11 +79,11 @@ def test_krea2_presets_have_correct_target():
 
 def test_get_preset_by_key():
     """get_preset_by_key should return correct metadata."""
-    info = get_preset_by_key("ltx-t2v-cinematic")
+    info = get_preset_by_key("krea2-t2i")
     assert info is not None
-    assert info.key == "ltx-t2v-cinematic"
-    assert info.target_model == "ltx-t2v"
-    assert "LTX" in info.display_name
+    assert info.key == "krea2-t2i"
+    assert info.target_model == "krea2-t2i"
+    assert "KREA" in info.display_name
 
 
 def test_get_preset_by_key_unknown():
@@ -136,7 +107,7 @@ def test_load_unknown_preset_returns_none():
 def test_all_presets_load_without_error():
     """All listed presets should load successfully."""
     all_presets = list_presets()
-    assert len(all_presets) >= 5
+    assert len(all_presets) >= 2
 
     for p in all_presets:
         content = load_preset(p.key)

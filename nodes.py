@@ -99,7 +99,7 @@ class PromptEnhancer:
     1. Unloads all ComfyUI models to free VRAM
     2. Spawns llama-server with your GGUF model
     3. Sends your prompt + system preset to the LLM
-    4. Retries (with different seeds) until a quality prompt is returned
+    4. Retries until a quality prompt is returned
     5. Kills the server when done
 
     Each execution produces a unique, enhanced prompt.
@@ -163,6 +163,7 @@ class PromptEnhancer:
                         "tooltip": "Path to the llama-server executable (or 'llama-server' if in PATH)",
                     },
                 ),
+                "seed": ("SEED", {}),
             },
             "optional": {
                 "temperature": (
@@ -205,19 +206,6 @@ class PromptEnhancer:
                         "tooltip": "Minimum probability threshold. Filters out very unlikely tokens",
                     },
                 ),
-                "seed": (
-                    "INT",
-                    {
-                        "default": -1,
-                        "min": -1,
-                        "max": 2**32 - 1,
-                        "step": 1,
-                        "tooltip": (
-                            "Random seed base. -1 = random each run (unique prompts). "
-                            "Fixed seed = reproducible. Retries increment this seed."
-                        ),
-                    },
-                ),
                 "max_retries": (
                     "INT",
                     {
@@ -227,7 +215,7 @@ class PromptEnhancer:
                         "step": 1,
                         "tooltip": (
                             "Max attempts to generate a quality prompt. "
-                            "Each retry uses a different seed. Server stays alive across retries."
+                            "Server stays alive across retries."
                         ),
                     },
                 ),
@@ -267,11 +255,11 @@ class PromptEnhancer:
         preset: str,
         llm_model_path: str,
         llama_server_path: str,
+        seed: int = 0,
         temperature: float = 1.0,
         top_p: float = 0.95,
         top_k: int = 64,
         min_p: float = 0.01,
-        seed: int = -1,
         max_retries: int = 5,
         extra_flags: str = DEFAULT_EXTRA_FLAGS,
         reference_image = None,
@@ -305,9 +293,6 @@ class PromptEnhancer:
         model_path = _resolve_path(llm_model_path)
         server_path = _resolve_path(llama_server_path, DEFAULT_SERVER_PATH)
 
-        # Use None for seed if -1 (random)
-        seed_value = None if seed == -1 else seed
-
         # Call the LLM client (handles retry loop internally)
         result = enhance_prompt(
             server_path=server_path,
@@ -319,7 +304,6 @@ class PromptEnhancer:
             top_p=top_p,
             top_k=top_k,
             min_p=min_p,
-            seed=seed_value,
             max_retries=max_retries,
             image=reference_image,
         )
@@ -379,6 +363,7 @@ class PromptEnhancerBatch:
                     "STRING",
                     {"default": DEFAULT_SERVER_PATH},
                 ),
+                "seed": ("SEED", {}),
             },
             "optional": {
                 "temperature": (
@@ -396,10 +381,6 @@ class PromptEnhancerBatch:
                 "min_p": (
                     "FLOAT",
                     {"default": 0.01, "min": 0.0, "max": 1.0, "step": 0.01},
-                ),
-                "seed": (
-                    "INT",
-                    {"default": -1, "min": -1, "max": 2**32 - 1, "step": 1},
                 ),
                 "max_retries": (
                     "INT",
@@ -435,11 +416,11 @@ class PromptEnhancerBatch:
         preset: str,
         llm_model_path: str,
         llama_server_path: str,
+        seed: int = 0,
         temperature: float = 1.0,
         top_p: float = 0.95,
         top_k: int = 64,
         min_p: float = 0.01,
-        seed: int = -1,
         max_retries: int = 3,
         extra_flags: str = DEFAULT_EXTRA_FLAGS,
         reference_image = None,
@@ -468,15 +449,11 @@ class PromptEnhancerBatch:
         # Resolve paths
         model_path = _resolve_path(llm_model_path)
         server_path = _resolve_path(llama_server_path, DEFAULT_SERVER_PATH)
-        seed_value = None if seed == -1 else seed
 
         # Enhance each prompt
         results = []
         for i, prompt in enumerate(raw_prompts):
             print(f"  [PromptEnhancer Batch] Enhancing prompt {i+1}/{len(raw_prompts)}...")
-
-            # Each prompt gets a unique seed offset
-            prompt_seed = None if seed_value is None else seed_value + (i * 1000)
 
             result = enhance_prompt(
                 server_path=server_path,
@@ -488,7 +465,6 @@ class PromptEnhancerBatch:
                 top_p=top_p,
                 top_k=top_k,
                 min_p=min_p,
-                seed=prompt_seed,
                 max_retries=max_retries,
                 image=reference_image,
             )

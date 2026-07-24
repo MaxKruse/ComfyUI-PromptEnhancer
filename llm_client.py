@@ -165,7 +165,6 @@ def chat_completion(
     top_p: float = 0.9,
     top_k: int = 40,
     min_p: float = 0.05,
-    seed: int | None = None,
     image = None,
 ) -> str | None:
     """Send a single chat completion request. Returns enhanced prompt or None on failure.
@@ -198,9 +197,6 @@ def chat_completion(
         "top_k": top_k,
         "min_p": min_p,
     }
-
-    if seed is not None:
-        payload["seed"] = seed
 
     data = json.dumps(payload).encode("utf-8")
     req = request.Request(
@@ -321,14 +317,13 @@ def enhance_prompt(
     top_p: float = 0.9,
     top_k: int = 40,
     min_p: float = 0.05,
-    seed: int | None = None,
     max_retries: int = 5,
     min_words: int = 25,
     image = None,
 ) -> str | None:
     """Enhance a prompt by spawning a temporary llama-server instance.
 
-    Retries up to max_retries times with different seeds until is_good_prompt() passes.
+    Retries up to max_retries times until is_good_prompt() passes.
     The server is spawned ONCE and kept alive across retries for efficiency.
 
     1. Free GPU memory (unload ComfyUI models).
@@ -400,13 +395,11 @@ def enhance_prompt(
 
     # Step 4: Retry loop — keep trying until we get a good prompt
     best_result: str | None = None
-    base_seed = seed if seed is not None else random.randint(0, 2**31 - 1)
 
     for attempt in range(1, max_retries + 1):
-        attempt_seed = base_seed + (attempt - 1)  # Different seed each retry
         _print_safe(
             f"  [PromptEnhancer] Attempt {attempt}/{max_retries} "
-            f"(seed={attempt_seed}, temp={temperature}, top_p={top_p}, top_k={top_k}, min_p={min_p})..."
+            f"(temp={temperature}, top_p={top_p}, top_k={top_k}, min_p={min_p})..."
         )
 
         result = chat_completion(
@@ -418,7 +411,6 @@ def enhance_prompt(
             top_p=top_p,
             top_k=top_k,
             min_p=min_p,
-            seed=attempt_seed,
             image=image,
         )
 

@@ -98,12 +98,11 @@ The `extra_flags` input passes arguments directly to `llama-server`. Here are th
 
 | Flag | Description |
 |------|-------------|
-| `--no-mmap` | Disable memory-mapping the model file. Slower initial load but reduces page faults and keeps RAM usage more predictable. (Deprecated in favor of `--load-mode none`) |
-| `--threads N` | Number of CPU threads for generation. Match to your physical core count (e.g. `12`) for best throughput. |
-| `-c N` / `--ctx-size N` | Prompt context window size in tokens. `16000` gives the LLM enough context for the system prompt, user prompt, and generation without truncation. |
-| `--mmproj PATH` | Path to the multimodal projector GGUF file. Required for vision input (reference images). Must match the base model (e.g. `mmproj-gemma-4-31B-it-*.gguf` for Gemma 4 31B). |
-| `--model-draft PATH` | Path to a draft model for speculative decoding. A smaller companion model that pre-generates candidate tokens the main model then accepts or rejects, boosting throughput. |
-| `--spec-type draft-mtp` | Speculative decoding strategy. `draft-mtp` uses Multi-Token Prediction - the draft model predicts multiple tokens per step instead of one. Requires a draft model trained with MTP heads (e.g. Unsloth's `gemma-4-31B-it-MTP-BF16.gguf`). |
+| `--no-mmap` | Disable memory-mapping the model file. Only use when the model fits in VRAM easily - avoids disk I/O during generation. |
+| `--threads N` | CPU threads for generation. Set to ~75% of physical (performance) cores - not hyperthreaded/logical threads. |
+| `-c N` / `--ctx-size N` | Prompt context window size in tokens. `16000` gives the LLM enough headroom for the system prompt, user prompt, and generation without truncation. |
+| `--mmproj PATH` | Path to the multimodal projector GGUF file. Required for LTX I2V (reference image input). Optional for KREA 2 T2I - use as a visual hint for the LLM. Must match the base model (e.g. `mmproj-gemma-4-31B-it-*.gguf` for Gemma 4 31B). |
+| `--model-draft PATH` + `--spec-type draft-mtp` | Speculative decoding for generation speedup. A draft model pre-generates candidate tokens that the main model accepts or rejects in parallel. Only adds value if your hardware has headroom to run both models. `draft-mtp` uses Multi-Token Prediction (requires an MTP-trained draft model like Unsloth's `gemma-4-31B-it-MTP-BF16.gguf`). |
 
 ### KREA 2 T2I (text-only)
 
@@ -113,7 +112,7 @@ The `extra_flags` input passes arguments directly to `llama-server`. Here are th
   --spec-type draft-mtp
 ```
 
-No `--mmproj` since no reference image is used. Speculative decoding with the MTP draft model speeds up generation.
+No `--mmproj` by default - optional if you want to send a reference image as a visual hint to the LLM. Speculative decoding with the MTP draft model speeds up generation if your hardware has capacity.
 
 ### LTX 2.3 10Eros I2V (multimodal)
 

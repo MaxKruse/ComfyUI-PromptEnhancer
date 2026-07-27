@@ -1,7 +1,8 @@
 """ComfyUI custom nodes for LLM-powered prompt enhancement via llama-server.
 
-Supports KREA-2 Text-to-Image (krea2-t2i).
+Supports KREA-2 Text-to-Image (krea2-t2i) and LTX 2.3 10Eros Image-to-Video (ltx2.3-10eros-i2v).
 
+Each preset handles both SFW and NSFW content via in-prompt directives.
 The target model is determined automatically from the selected preset.
 """
 
@@ -29,10 +30,10 @@ except ImportError:
 # Default server path - works if llama-server is in PATH
 DEFAULT_SERVER_PATH = "llama-server"
 
-# Default model: Gemma 4 12B QAT Q4_0 (~6.6 GB)
+# Default model: Gemma 4 31B NVFP4 Turbo (~18 GB)
 DEFAULT_MODEL_PATH = (
     "C:/Users/maxkr/.lmstudio/models/lmstudio-community/"
-    "gemma-4-12B-it-QAT-GGUF/gemma-4-12B-it-QAT-Q4_0.gguf"
+    "gemma-4-31B-it-QAT-GGUF/gemma-4-31B-it-NVFP4-turbo-NVFP4.gguf"
 )
 
 # Default llama-server flags matching ~/.llama-cpp.ini
@@ -92,7 +93,8 @@ def _get_default_preset_display(display_to_key: dict) -> str:
 class PromptEnhancer:
     """Enhance a prompt using a local LLM (llama-server).
 
-    Supports KREA-2 Text-to-Image via presets.
+    Supports KREA-2 T2I and LTX 2.3 10Eros I2V via presets.
+    Each preset handles both SFW and NSFW content automatically.
     The target model is determined by the selected preset.
 
     This node:
@@ -103,7 +105,6 @@ class PromptEnhancer:
     5. Kills the server when done
 
     Each execution produces a unique, enhanced prompt.
-    Include any LoRA info or extra context directly in the prompt field.
     """
 
     # Class-level cache for preset options (built once at first INPUT_TYPES call)
@@ -127,7 +128,8 @@ class PromptEnhancer:
                     {
                         "tooltip": (
                             "System prompt preset that guides how the LLM enhances your prompt.\n"
-                            "The target model (KREA 2) is determined by the preset."
+                            "Each preset handles both SFW and NSFW content automatically.\n"
+                            "The target model is determined by the preset."
                         ),
                     },
                 ),
@@ -245,7 +247,8 @@ class PromptEnhancer:
     CATEGORY = "Prompt Enhancer"
     DESCRIPTION = (
         "Enhance prompts using a local LLM via llama-server. "
-        "Supports KREA-2 (T2I) via presets. "
+        "Supports KREA-2 (T2I) and LTX 2.3 10Eros (I2V) via presets. "
+        "Each preset handles both SFW and NSFW content automatically. "
         "Unloads models, runs LLM with retry loop, returns unique enhanced prompt."
     )
 
@@ -337,7 +340,8 @@ class PromptEnhancerBatch:
                     s._preset_display_names if s._preset_display_names else ["no presets found"],
                     {
                         "tooltip": (
-                            "System prompt preset. Target model determined by preset."
+                            "System prompt preset. Each preset handles both SFW and NSFW content automatically. "
+                            "Target model determined by preset."
                         ),
                     },
                 ),
@@ -407,6 +411,7 @@ class PromptEnhancerBatch:
     CATEGORY = "Prompt Enhancer"
     DESCRIPTION = (
         "Enhance multiple prompts (one per line) with retry loop. "
+        "Each preset handles both SFW and NSFW content automatically. "
         "Each prompt gets its own server session with quality validation."
     )
 

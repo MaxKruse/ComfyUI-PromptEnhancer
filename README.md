@@ -6,12 +6,12 @@ Drop this into your `custom_nodes/` directory. No API keys needed - runs entirel
 
 ## Supported Models
 
-- **KREA 2 T2I** - text-to-image prompt expansion based on [Krea-2's official `expansion.txt`](https://github.com/krea-ai/krea-2/blob/main/docs/expansion.txt)
-- **LTX 2.3 10Eros I2V** - image-to-video motion prompt engineering with VBVR reasoning LoRA and PhysLTX physics LoRA support
+- **KREA 2 T2I** - text-to-image prompt expansion based on [Krea-2's official `expansion.txt`](https://github.com/krea-ai/krea-2/blob/main/docs/expansion.txt) and community research
+- **LTX 2.3 10Eros I2V** - image-to-video motion prompt engineering based on [LTX 2.3 official prompt guide](https://ltx.io/blog/ltx-2-3-prompt-guide) and community research
 
 ## Features
 
-- **Preset system**: 4 built-in presets (General + NSFW for each target model)
+- **Auto-detecting presets**: 2 built-in presets that handle both SFW and NSFW content automatically via in-prompt directives
 - **Reference image**: Send an image to the LLM alongside your prompt (requires a multimodal GGUF + `--mmproj` flag)
 - **VRAM-aware**: Automatically unloads ComfyUI models before spawning llama-server, then frees memory after
 - **Retry loop**: Keeps trying until a quality, unique prompt is generated
@@ -51,7 +51,7 @@ Single prompt enhancement with retry loop.
 | Input | Type | Description |
 |-------|------|-------------|
 | `preset` | Dropdown | System prompt preset (determines target model and expansion style) |
-| `prompt` | String | Your base prompt. Include any extra context (LoRA info, style notes, etc.) |
+| `prompt` | String | Your base prompt. The preset auto-detects SFW vs NSFW content |
 | `llm_model_path` | String | Path to your `.gguf` model |
 | `llama_server_path` | String | Path to `llama-server` binary (default: `llama-server`) |
 | `seed` | Seed | Random seed for generation |
@@ -73,10 +73,10 @@ Enhance multiple prompts (one per line). Each gets its own server session with q
 
 | Display Name | Target | Description |
 |--------------|--------|-------------|
-| `KREA 2 T2I - General` | KREA 2 Text-to-Image | SFW prompt expansion based on [official Krea-2 guidelines](https://github.com/krea-ai/krea-2/blob/main/docs/expansion.txt) |
-| `KREA 2 T2I - NSFW` | KREA 2 Text-to-Image | Uncensored, explicit text-to-image prompts |
-| `LTX 2.3 10Eros I2V - General` | LTX 2.3 Image-to-Video | Cinematic motion prompts with VBVR reasoning and PhysLTX physics support |
-| `LTX 2.3 10Eros I2V - NSFW` | LTX 2.3 Image-to-Video | Uncensored, explicit image-to-video motion prompts |
+| `KREA 2 T2I` | KREA 2 Text-to-Image | Prompt expansion for both SFW and NSFW content. Based on [official Krea-2 guidelines](https://github.com/krea-ai/krea-2/blob/main/docs/expansion.txt) and [community research](https://civitai.com/models/2749367) |
+| `LTX 2.3 10Eros I2V` | LTX 2.3 Image-to-Video | Motion prompt engineering for both SFW and NSFW content. Based on [official LTX 2.3 guide](https://ltx.io/blog/ltx-2-3-prompt-guide) and [community research](https://huggingface.co/TenStrip/LTX2.3-10Eros_Workflows) |
+
+Each preset contains both general and NSFW-specific directives. The LLM detects the content type from your prompt and applies the appropriate rules automatically - no need to switch presets.
 
 ### Custom Presets
 
@@ -97,19 +97,19 @@ For I2V workflows, connect a reference image so the LLM can see the source frame
 ### KREA 2 Text-to-Image
 
 ```
-[CLIP Text Encode] -> [Prompt Enhancer (preset: KREA 2 T2I - General)] -> [KREA 2 Sampler]
+[CLIP Text Encode] -> [Prompt Enhancer (preset: KREA 2 T2I)] -> [KREA 2 Sampler]
 ```
 
-For NSFW content, use the `KREA 2 T2I - NSFW` preset with an uncensored checkpoint and NSFW LoRA.
+The preset handles both SFW and NSFW content automatically based on your prompt.
 
 ### LTX 2.3 Image-to-Video
 
 ```
-[Load Image] -> [Prompt Enhancer (preset: LTX 2.3 10Eros I2V - NSFW, reference_image connected)]
+[Load Image] -> [Prompt Enhancer (preset: LTX 2.3 10Eros I2V, reference_image connected)]
                         -> [PreviewAny] -> [CLIP Text Encode] -> [LTX 2.3 Sampler]
 ```
 
-The reference image lets the LLM see the source frame and describe motion relative to what's already visible.
+The reference image lets the LLM see the source frame and describe motion relative to what's already visible. The preset handles both SFW and NSFW content automatically.
 
 ## VRAM Management
 
@@ -128,6 +128,6 @@ This means the LLM and ComfyUI models don't compete for VRAM.
 - **Server fails to start**: Check that `llama-server` is in your PATH or provide the full path
 - **Model not found**: Verify the `.gguf` file path is correct (absolute or relative to ComfyUI root)
 - **Out of memory**: Reduce model size (Q4 -> Q3) or add `--ctx-size 4096` to extra_flags
-- **Refusal outputs**: Use the NSFW preset for explicit content, or try a less-aligned model
+- **Refusal outputs**: Try a less-aligned model or increase temperature
 - **Slow generation**: Use a smaller model or add `-ngl 99` for full GPU offload
 - **Reference image not working**: Make sure your model is multimodal and you passed `--mmproj` in extra_flags

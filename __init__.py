@@ -1,7 +1,8 @@
 """ComfyUI Prompt Enhancer: LLM-powered prompt enhancement for video and image generation.
 
 Uses llama-server (llama.cpp) with GGUF models to enhance prompts via presets.
-Supports LTX 2.3 (text-to-video, image-to-video) and KREA-2 (text-to-image) target models.
+Supports LTX 2.3 10Eros (image-to-video) and KREA-2 (text-to-image) target models.
+Each preset handles both SFW and NSFW content automatically via in-prompt directives.
 Unloads ComfyUI models before running the LLM, then frees memory after.
 """
 

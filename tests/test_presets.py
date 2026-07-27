@@ -20,16 +20,40 @@ def test_krea2_t2i_preset_has_expansion_content():
     assert "text-to-image" in content.lower()
 
 
-def test_krea2_t2i_nsfw_preset_exists():
-    """KREA-2 NSFW preset should exist."""
-    content = load_preset("krea2-t2i-nsfw")
+def test_krea2_t2i_preset_has_nsfw_directives():
+    """KREA-2 preset should contain NSFW directives for auto-detection."""
+    content = load_preset("krea2-t2i")
+    assert content is not None
+    assert "NSFW" in content
+    assert "anatomical" in content.lower()
+
+
+def test_ltx2_3_i2v_preset_exists():
+    """LTX 2.3 10Eros image-to-video preset should exist."""
+    content = load_preset("ltx2.3-10eros-i2v")
     assert content is not None
     assert len(content) > 100
+    assert "image-to-video" in content.lower() or "video" in content.lower()
+
+
+def test_ltx2_3_i2v_preset_has_nsfw_directives():
+    """LTX 2.3 preset should contain NSFW directives for auto-detection."""
+    content = load_preset("ltx2.3-10eros-i2v")
+    assert content is not None
+    assert "NSFW" in content
+    assert "anatomical" in content.lower()
+
+
+def test_no_separate_nsfw_presets():
+    """NSFW presets should be merged into main presets, not separate files."""
+    assert load_preset("krea2-t2i-nsfw") is None
+    assert load_preset("ltx2.3-10eros-i2v-nsfw") is None
 
 
 def test_target_model_labels_complete():
     """Target model labels should cover all supported models."""
     assert "krea2-t2i" in TARGET_MODEL_LABELS
+    assert "ltx2.3-10eros-i2v" in TARGET_MODEL_LABELS
 
 
 def test_list_presets_returns_named_tuples():
@@ -75,6 +99,15 @@ def test_krea2_presets_have_correct_target():
     assert len(krea2_presets) > 0
     for p in krea2_presets:
         assert p.target_model == "krea2-t2i"
+
+
+def test_ltx_presets_have_correct_target():
+    """LTX presets should derive target_model=ltx2.3-10eros-i2v."""
+    presets = list_presets()
+    ltx_presets = [p for p in presets if p.key.startswith("ltx2.3-")]
+    assert len(ltx_presets) > 0
+    for p in ltx_presets:
+        assert p.target_model == "ltx2.3-10eros-i2v"
 
 
 def test_get_preset_by_key():

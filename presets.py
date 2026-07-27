@@ -1,8 +1,12 @@
 """Preset file discovery and loading for prompt enhancement system prompts.
 
 Presets are organized by target model prefix:
-  - krea2-t2i-* : KREA-2 text-to-image presets
-  - ltx2.3-10eros-i2v-* : LTX 2.3 10Eros image-to-video presets
+  - krea2-t2i : KREA-2 text-to-image preset (general + NSFW auto-detect)
+  - ltx2.3-10eros-i2v : LTX 2.3 10Eros image-to-video preset (general + NSFW auto-detect)
+
+Each preset handles both SFW and NSFW content via in-prompt directives.
+The LLM detects the content type from the user's prompt and applies the
+appropriate rules automatically.
 """
 
 from __future__ import annotations
@@ -27,23 +31,13 @@ TARGET_MODEL_LABELS: dict[str, str] = {
     "ltx2.3-10eros-i2v": "LTX 2.3 10Eros I2V",
 }
 
-# Mapping from preset key -> display suffix (the part after the target prefix).
-# Add new entries here when adding preset files.
-_PRESET_DISPLAY_NAMES: dict[str, str] = {
-    "krea2-t2i": "General",
-    "krea2-t2i-nsfw": "NSFW",
-    "ltx2.3-10eros-i2v": "General",
-    "ltx2.3-10eros-i2v-nsfw": "NSFW",
-}
-
 
 def _derive_target_model(preset_key: str) -> str:
     """Extract the target model ID from a preset key.
 
-    Matches the longest known prefix first (e.g. 'ltx-t2v' from 'ltx-t2v-cinematic').
-    Falls back to the key itself if no prefix matches (e.g. 'krea2-t2i' == 'krea2-t2i').
+    Matches the longest known prefix first (e.g. 'ltx2.3-10eros-i2v' from 'ltx2.3-10eros-i2v').
+    Falls back to the key itself if no prefix matches.
     """
-    # Sort prefixes longest-first so 'ltx-t2v' matches before 'ltx'
     for prefix in sorted(TARGET_MODEL_LABELS.keys(), key=len, reverse=True):
         if preset_key == prefix or preset_key.startswith(prefix + "-"):
             return prefix
@@ -53,9 +47,8 @@ def _derive_target_model(preset_key: str) -> str:
 def list_presets() -> list[PresetInfo]:
     """Return sorted list of all available presets with display metadata.
 
-    Presets discovered from the filesystem are enriched with display names
-    and target model info. Presets without an explicit display name use
-    the raw filename suffix.
+    Presets are discovered from the filesystem and enriched with display names
+    and target model info.
     """
     if not PRESETS_DIR.is_dir():
         return []
@@ -66,15 +59,10 @@ def list_presets() -> list[PresetInfo]:
         target = _derive_target_model(key)
         label = TARGET_MODEL_LABELS.get(target, target)
 
-        if key in _PRESET_DISPLAY_NAMES:
-            display = f"{label} - {_PRESET_DISPLAY_NAMES[key]}"
+        if key == target:
+            display = label
         else:
-            # Derive suffix: strip the target prefix (and trailing dash)
-            suffix = key
-            if key == target:
-                suffix = "General"
-            elif key.startswith(target + "-"):
-                suffix = key[len(target) + 1 :]
+            suffix = key[len(target) + 1:]
             display = f"{label} - {suffix}"
 
         results.append(PresetInfo(key=key, display_name=display, target_model=target))

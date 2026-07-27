@@ -16,7 +16,7 @@ def test_prompt_enhancer_has_preset_input():
     options = preset_def[0]
 
     # Should have presets for all target models
-    assert len(options) >= 5
+    assert len(options) >= 2
 
     # Display names should include target model labels
     display_str = " ".join(options)
@@ -106,9 +106,12 @@ def test_preset_dropdown_has_clear_display_names():
         assert not opt.startswith("ltx-i2v-"), f"Display name should not be raw key: {opt}"
         assert not opt == "krea2-t2i", f"Display name should not be raw key: {opt}"
 
-    # Should use "Model - Style" format
+    # Base presets use just the model name (no suffix), custom presets use "Model - Style" format
     for opt in options:
-        assert " - " in opt, f"Display name should use ' - ' separator: {opt}"
+        # Either has a " - " separator (custom preset) or is a base model name
+        assert " - " in opt or opt in ["KREA 2 T2I", "LTX 2.3 10Eros I2V"], (
+            f"Display name should use ' - ' separator or be a base model name: {opt}"
+        )
 
 
 def test_preset_options_sorted_alphabetically():

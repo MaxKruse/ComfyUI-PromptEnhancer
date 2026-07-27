@@ -92,6 +92,40 @@ For I2V workflows, connect a reference image so the LLM can see the source frame
   --mmproj "C:/path/to/mmproj-gemma-4-31B-it-QAT-BF16.gguf"
   ```
 
+## Extra Flags Reference
+
+The `extra_flags` input passes arguments directly to `llama-server`. Here are the flags used in the example workflows:
+
+| Flag | Description |
+|------|-------------|
+| `--no-mmap` | Disable memory-mapping the model file. Slower initial load but reduces page faults and keeps RAM usage more predictable. (Deprecated in favor of `--load-mode none`) |
+| `--threads N` | Number of CPU threads for generation. Match to your physical core count (e.g. `12`) for best throughput. |
+| `-c N` / `--ctx-size N` | Prompt context window size in tokens. `16000` gives the LLM enough context for the system prompt, user prompt, and generation without truncation. |
+| `--mmproj PATH` | Path to the multimodal projector GGUF file. Required for vision input (reference images). Must match the base model (e.g. `mmproj-gemma-4-31B-it-*.gguf` for Gemma 4 31B). |
+| `--model-draft PATH` | Path to a draft model for speculative decoding. A smaller companion model that pre-generates candidate tokens the main model then accepts or rejects, boosting throughput. |
+| `--spec-type draft-mtp` | Speculative decoding strategy. `draft-mtp` uses Multi-Token Prediction - the draft model predicts multiple tokens per step instead of one. Requires a draft model trained with MTP heads (e.g. Unsloth's `gemma-4-31B-it-MTP-BF16.gguf`). |
+
+### KREA 2 T2I (text-only)
+
+```text
+--no-mmap --threads 12 -c 16000 \
+  --model-draft "C:\Users\maxkr\.lmstudio\models\unsloth\gemma-4-31B-it-GGUF\gemma-4-31B-it-MTP-BF16.gguf" \
+  --spec-type draft-mtp
+```
+
+No `--mmproj` since no reference image is used. Speculative decoding with the MTP draft model speeds up generation.
+
+### LTX 2.3 10Eros I2V (multimodal)
+
+```text
+--no-mmap --threads 12 -c 16000 \
+  --mmproj "C:\Users\maxkr\.lmstudio\models\lmstudio-community\gemma-4-31B-it-QAT-GGUF\mmproj-gemma-4-31B-it-NVFP4-turbo-bf16.gguf" \
+  --model-draft "C:\Users\maxkr\.lmstudio\models\unsloth\gemma-4-31B-it-GGUF\gemma-4-31B-it-MTP-BF16.gguf" \
+  --spec-type draft-mtp
+```
+
+Adds `--mmproj` for vision input so the LLM can see the reference image. Same speculative decoding setup.
+
 ## Example Workflows
 
 ### KREA 2 Text-to-Image

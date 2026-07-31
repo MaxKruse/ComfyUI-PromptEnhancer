@@ -78,6 +78,22 @@ Enhance multiple prompts (one per line). Each gets its own server session with q
 
 Each preset contains both general and NSFW-specific directives. The LLM detects the content type from your prompt and applies the appropriate rules automatically - no need to switch presets.
 
+### Supported LoRAs (LTX 2.3 10Eros I2V)
+
+The LTX preset includes an intelligent LoRA routing guide. The LLM analyzes your prompt and activates the relevant LoRA sections based on keyword matching. Multiple LoRAs can activate from a single prompt.
+
+| LoRA File | Activates on | Purpose |
+|-----------|-------------|---------|
+| `LTX2.3_reasoning_Sulphur-2_I2V_V4` | **Always** | Universal prompt-following and motion precision. Stacks with everything. |
+| `LTX2.3_Physics_V2` | thrust, slam, impact, bounce, collision, momentum, grind, pound | Grounded body-to-body contact with real impact and friction. |
+| `Cr3ampi3_animation_sulphur-2_i2v_v1.0` | creampie, cum inside, fills her, breeding, loaded, internal ejaculation | Internal ejaculation animation with fluid temporal behavior and body reactions. |
+| `throat_bulge-10Eros_i2v_v1.0` | deepthroat, throat bulge, swallows cock, takes it deep, full swallow | Visible throat deformation during deepthroat with muffled audio and head movement. |
+| `ltx23-ultimatedt-NSFW-sulphured_audio_final_k3nk` | blowjob, oral, sucking, cock, penis, dick, testicles | General NSFW refinement with better penis anatomy and sulphur audio integration. |
+| `LTX2_3_NSFW_furry_concat_v2` | anthro, furry, anthropomorphic, snout, fur, tail, paws | Multi-purpose NSFW for furry and non-furry content. Supports 2D, 3D, and realistic styles. |
+| `ltx-2.3-22b-distilled-lora-1.1_fro90_ceil72_condsafe` | N/A (technical) | Faster generation with fewer steps. Loaded automatically by workflow. |
+
+LoRAs not listed above (e.g. `gemma-3-12b-it-abliterated`, `ltx-2.3-22b-distilled-lora-384-1.1`) are available in the models folder but not recommended - see the preset for details.
+
 ### Custom Presets
 
 Add `.txt` files to the `presets/` directory. Use the naming convention `<target>-<name>.txt` (e.g. `krea2-t2i-portrait.txt`). The target prefix determines the display label in the dropdown.

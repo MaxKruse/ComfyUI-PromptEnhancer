@@ -219,3 +219,42 @@ def test_prompt_enhancer_prompt_is_first_input():
     assert required_keys[0] == "prompt", (
         f"prompt should be first required input for bypass, got {required_keys[0]}"
     )
+
+
+def test_prompt_enhancer_has_mandatory_inputs():
+    """PromptEnhancer should have all mandatory inputs: ctx_size, seed, model path, server path."""
+    from nodes import PromptEnhancer
+
+    input_types = _get_input_types(PromptEnhancer)
+    required = input_types.get("required", {})
+
+    assert "prompt" in required
+    assert "ctx_size" in required, "ctx_size should be a required input"
+    assert "seed" in required, "seed should be a required input"
+    assert "llm_model_path" in required
+    assert "llama_server_path" in required
+
+
+def test_prompt_enhancer_has_optional_mmproj():
+    """PromptEnhancer should have optional mmproj_path input."""
+    from nodes import PromptEnhancer
+
+    input_types = _get_input_types(PromptEnhancer)
+    optional = input_types.get("optional", {})
+
+    assert "mmproj_path" in optional, (
+        f"mmproj_path should be an optional input. Optional keys: {list(optional.keys())}"
+    )
+
+
+def test_prompt_enhancer_ctx_size_defaults_to_16000():
+    """ctx_size should default to 16000."""
+    from nodes import PromptEnhancer
+
+    input_types = _get_input_types(PromptEnhancer)
+    required = input_types.get("required", {})
+    ctx_def = required["ctx_size"]
+
+    # V3 io.Int.Input: type is "INT", config is second element
+    assert ctx_def[0] == "INT"
+    assert ctx_def[1].get("default") == 16000

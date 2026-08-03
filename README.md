@@ -56,6 +56,9 @@ Single prompt enhancement with retry loop.
 | `preset` | Dropdown | System prompt preset (determines target model and expansion style) |
 | `llm_model_path` | String | Path to your `.gguf` model |
 | `llama_server_path` | String | Path to `llama-server` binary (default: `llama-server`) |
+| `ctx_size` | Int | Context window size in tokens (default: 16000, range: 2048-131072) |
+| `seed` | Int | Random seed for generation (default: 0, auto-randomizes after each run) |
+| `mmproj_path` | String | Optional - path to multimodal projector `.gguf` for vision input |
 | `ref_image_0` .. `ref_image_8` | Image | Optional dynamic reference images (0-9 slots via Autogrow) |
 
 **Output:** `enhanced_prompt` - the LLM-enhanced prompt

@@ -95,21 +95,15 @@ def find_free_port() -> int:
         return s.getsockname()[1]
 
 
-def _user_set_ctx(flags_list: list[str]) -> bool:
-    """Check if the user already specified a context size in their flags."""
-    for token in flags_list:
-        if token in ("-c", "--ctx-size"):
-            return True
-        if token.startswith("--ctx-size="):
-            return True
-    return False
-
-
 def build_command(
     server_path: str,
     model_path: str,
     port: int,
-    extra_flags: str,
+    *,
+    ctx_size: int = 16000,
+    seed: int = 0,
+    mmproj_path: str = "",
+    extra_flags: str = "",
 ) -> list[str]:
     """Build the full llama-server command list."""
     import shlex
@@ -123,10 +117,17 @@ def build_command(
         "--host", "127.0.0.1",
         "--no-ui",
         "--no-warmup",
+        "-c", str(ctx_size),
     ]
 
-    if not _user_set_ctx(user_flags):
-        cmd.extend(["-c", "16000"])
+    if seed < 0:
+        # Use a random seed
+        cmd.extend(["--seed", str(random.randint(1, 2**31 - 1))])
+    else:
+        cmd.extend(["--seed", str(seed)])
+
+    if mmproj_path:
+        cmd.extend(["--mmproj", mmproj_path])
 
     cmd.extend(user_flags)
     return cmd
@@ -324,6 +325,9 @@ def enhance_prompt(
     system_prompt: str,
     user_prompt: str,
     *,
+    ctx_size: int = 16000,
+    seed: int = 0,
+    mmproj_path: str = "",
     extra_flags: str = "",
     temperature: float = 0.9,
     top_p: float = 0.9,
@@ -356,7 +360,15 @@ def enhance_prompt(
     # Step 2: Find port and build command
     port = find_free_port()
     base_url = f"http://127.0.0.1:{port}"
-    cmd = build_command(server_path, model_path, port, extra_flags)
+    cmd = build_command(
+        server_path,
+        model_path,
+        port,
+        ctx_size=ctx_size,
+        seed=seed,
+        mmproj_path=mmproj_path,
+        extra_flags=extra_flags,
+    )
 
     _print_safe(f"  [PromptEnhancer] Running llama-server (model: {model_path_resolved.name}, port: {port})...")
     _print_safe(f"  [PromptEnhancer] Command: {' '.join(cmd)}")

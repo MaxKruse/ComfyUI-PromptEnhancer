@@ -40,10 +40,6 @@ DEFAULT_MODEL_PATH = (
     "gemma-4-31B-it-QAT-GGUF/gemma-4-31B-it-NVFP4-turbo-NVFP4.gguf"
 )
 
-# Default llama-server flags matching ~/.llama-cpp.ini
-DEFAULT_EXTRA_FLAGS = "--no-mmap --threads 12 -c 16000"
-
-
 def _get_comfy_base_path() -> str:
     """Get the ComfyUI base directory for relative model paths."""
     custom_nodes_dir = Path(__file__).resolve().parent.parent
@@ -198,6 +194,31 @@ class PromptEnhancer(ComfyNode):
                     placeholder="llama-server or full path to llama-server binary",
                     tooltip="Path to the llama-server executable (or 'llama-server' if in PATH)",
                 ),
+                io.Int.Input(
+                    "ctx_size",
+                    default=16000,
+                    min=2048,
+                    max=131072,
+                    step=1024,
+                    tooltip="Prompt context window size in tokens. 16000 gives the LLM enough headroom for system prompt, user prompt, and generation.",
+                ),
+                io.Int.Input(
+                    "seed",
+                    default=0,
+                    min=0,
+                    max=2**63 - 1,
+                    step=1,
+                    tooltip="Random seed for LLM generation. Use -1 for random seed each time.",
+                    control_after_generate=io.ControlAfterGenerate.randomize,
+                ),
+                # Optional inputs
+                io.String.Input(
+                    "mmproj_path",
+                    optional=True,
+                    default="",
+                    placeholder="Path to mmproj-*.gguf multimodal projector file",
+                    tooltip="Multimodal projector GGUF for vision input. Required when using reference images with a multimodal model.",
+                ),
                 io.Autogrow.Input(
                     "ref_images",
                     optional=True,
@@ -235,7 +256,10 @@ class PromptEnhancer(ComfyNode):
         preset: str,
         llm_model_path: str,
         llama_server_path: str,
+        ctx_size: int,
+        seed: int,
         ref_images: dict[str, any] | None = None,
+        mmproj_path: str = "",
         **kwargs,
     ) -> io.NodeOutput:
         if not prompt or not prompt.strip():
@@ -251,6 +275,7 @@ class PromptEnhancer(ComfyNode):
         # Resolve paths
         model_path = _resolve_path(llm_model_path)
         server_path = _resolve_path(llama_server_path, DEFAULT_SERVER_PATH)
+        mmproj = _resolve_path(mmproj_path) if mmproj_path else ""
 
         # Collect reference images from autogrow dict
         images = []
@@ -266,7 +291,10 @@ class PromptEnhancer(ComfyNode):
             model_path=model_path,
             system_prompt=system_prompt,
             user_prompt=user_prompt,
+            ctx_size=ctx_size,
+            seed=seed,
             images=images,
+            mmproj_path=mmproj,
         )
 
         return io.NodeOutput(result if result else prompt)
@@ -322,6 +350,28 @@ class PromptEnhancerBatch(ComfyNode):
                     "llama_server_path",
                     default=DEFAULT_SERVER_PATH,
                 ),
+                io.Int.Input(
+                    "ctx_size",
+                    default=16000,
+                    min=2048,
+                    max=131072,
+                    step=1024,
+                    tooltip="Prompt context window size in tokens.",
+                ),
+                io.Int.Input(
+                    "seed",
+                    default=0,
+                    min=0,
+                    max=2**63 - 1,
+                    step=1,
+                    control_after_generate=io.ControlAfterGenerate.randomize,
+                ),
+                io.String.Input(
+                    "mmproj_path",
+                    optional=True,
+                    default="",
+                    placeholder="Path to mmproj-*.gguf multimodal projector file",
+                ),
                 io.Autogrow.Input(
                     "ref_images",
                     optional=True,
@@ -351,7 +401,10 @@ class PromptEnhancerBatch(ComfyNode):
         preset: str,
         llm_model_path: str,
         llama_server_path: str,
+        ctx_size: int,
+        seed: int,
         ref_images: dict[str, any] | None = None,
+        mmproj_path: str = "",
         **kwargs,
     ) -> io.NodeOutput:
         # Parse prompts (one per line)
@@ -367,6 +420,7 @@ class PromptEnhancerBatch(ComfyNode):
         # Resolve paths
         model_path = _resolve_path(llm_model_path)
         server_path = _resolve_path(llama_server_path, DEFAULT_SERVER_PATH)
+        mmproj = _resolve_path(mmproj_path) if mmproj_path else ""
 
         # Collect reference images
         images = []
@@ -386,7 +440,10 @@ class PromptEnhancerBatch(ComfyNode):
                 model_path=model_path,
                 system_prompt=system_prompt,
                 user_prompt=prompt,
+                ctx_size=ctx_size,
+                seed=seed,
                 images=images,
+                mmproj_path=mmproj,
             )
             results.append(result if result else prompt)
 

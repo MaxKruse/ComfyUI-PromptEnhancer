@@ -16,7 +16,7 @@ def test_krea2_t2i_preset_has_expansion_content():
     """KREA-2 preset should contain key expansion instructions."""
     content = load_preset("krea2-t2i")
     assert content is not None
-    assert "Faithfulness" in content or "faithfulness" in content
+    assert "User Prompt Is Ground Truth" in content or "ground truth" in content.lower()
     assert "text-to-image" in content.lower()
 
 
@@ -50,10 +50,57 @@ def test_no_separate_nsfw_presets():
     assert load_preset("ltx2.3-10eros-i2v-nsfw") is None
 
 
+def test_minimax_h3_r2v_preset_exists():
+    """MiniMax H3 R2V preset should exist."""
+    content = load_preset("minimax-h3-r2v")
+    assert content is not None
+    assert len(content) > 100
+    assert "video" in content.lower()
+
+
+def test_minimax_h3_r2v_preset_has_key_content():
+    """MiniMax H3 R2V preset should contain key video prompting instructions."""
+    content = load_preset("minimax-h3-r2v")
+    assert content is not None
+    assert "audio" in content.lower()
+    assert "MM:SS" in content
+    assert "camera" in content.lower()
+    assert "subject_definitions" in content.lower()
+    assert "detailed_description" in content.lower()
+
+
+def test_minimax_h3_r2v_preset_is_r2v_only():
+    """MiniMax H3 R2V preset should be Reference-to-Video only."""
+    content = load_preset("minimax-h3-r2v")
+    assert content is not None
+    assert "reference-to-video" in content.lower() or "r2v" in content.lower()
+    assert "<Subject" in content
+    assert "<Picture" in content
+    assert "<Audio" in content
+
+
+def test_minimax_h3_r2v_preset_has_nsfw_directives():
+    """MiniMax H3 R2V preset should contain NSFW directives for auto-detection."""
+    content = load_preset("minimax-h3-r2v")
+    assert content is not None
+    assert "NSFW" in content
+    assert "anatomical" in content.lower()
+
+
+def test_minimax_presets_have_correct_target():
+    """MiniMax H3 presets should derive target_model=minimax-h3."""
+    presets = list_presets()
+    minimax_presets = [p for p in presets if p.key.startswith("minimax-h3")]
+    assert len(minimax_presets) > 0
+    for p in minimax_presets:
+        assert p.target_model == "minimax-h3"
+
+
 def test_target_model_labels_complete():
     """Target model labels should cover all supported models."""
     assert "krea2-t2i" in TARGET_MODEL_LABELS
     assert "ltx2.3-10eros-i2v" in TARGET_MODEL_LABELS
+    assert "minimax-h3" in TARGET_MODEL_LABELS
 
 
 def test_list_presets_returns_named_tuples():

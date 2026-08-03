@@ -219,6 +219,13 @@ class PromptEnhancer(ComfyNode):
                     placeholder="Path to mmproj-*.gguf multimodal projector file",
                     tooltip="Multimodal projector GGUF for vision input. Required when using reference images with a multimodal model.",
                 ),
+                io.String.Input(
+                    "extra_server_args",
+                    optional=True,
+                    default="",
+                    placeholder='e.g. --n-gpu-layers 99 --threads 8 --flash-attn',
+                    tooltip="Extra command-line flags passed directly to llama-server. Space-separated.",
+                ),
                 io.Autogrow.Input(
                     "ref_images",
                     optional=True,
@@ -260,6 +267,7 @@ class PromptEnhancer(ComfyNode):
         seed: int,
         ref_images: dict[str, any] | None = None,
         mmproj_path: str = "",
+        extra_server_args: str = "",
         **kwargs,
     ) -> io.NodeOutput:
         if not prompt or not prompt.strip():
@@ -295,6 +303,7 @@ class PromptEnhancer(ComfyNode):
             seed=seed,
             images=images,
             mmproj_path=mmproj,
+            extra_flags=extra_server_args,
         )
 
         return io.NodeOutput(result if result else prompt)
@@ -372,6 +381,13 @@ class PromptEnhancerBatch(ComfyNode):
                     default="",
                     placeholder="Path to mmproj-*.gguf multimodal projector file",
                 ),
+                io.String.Input(
+                    "extra_server_args",
+                    optional=True,
+                    default="",
+                    placeholder='e.g. --n-gpu-layers 99 --threads 8 --flash-attn',
+                    tooltip="Extra command-line flags passed directly to llama-server. Space-separated.",
+                ),
                 io.Autogrow.Input(
                     "ref_images",
                     optional=True,
@@ -405,6 +421,7 @@ class PromptEnhancerBatch(ComfyNode):
         seed: int,
         ref_images: dict[str, any] | None = None,
         mmproj_path: str = "",
+        extra_server_args: str = "",
         **kwargs,
     ) -> io.NodeOutput:
         # Parse prompts (one per line)
@@ -444,6 +461,7 @@ class PromptEnhancerBatch(ComfyNode):
                 seed=seed,
                 images=images,
                 mmproj_path=mmproj,
+                extra_flags=extra_server_args,
             )
             results.append(result if result else prompt)
 

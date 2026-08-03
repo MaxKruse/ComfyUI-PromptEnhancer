@@ -122,9 +122,11 @@ def build_command(
 
     if seed < 0:
         # Use a random seed
-        cmd.extend(["--seed", str(random.randint(1, 2**31 - 1))])
+        cmd.extend(["--seed", str(random.randint(1, 2**32 - 1))])
     else:
-        cmd.extend(["--seed", str(seed)])
+        # llama-server --seed only accepts a 32-bit unsigned int.
+        # ComfyUI seeds can be up to 2**63, so clamp to fit.
+        cmd.extend(["--seed", str(seed % (2**32))])
 
     if mmproj_path:
         cmd.extend(["--mmproj", mmproj_path])

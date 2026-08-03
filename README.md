@@ -8,6 +8,7 @@ Drop this into your `custom_nodes/` directory. No API keys needed - runs entirel
 
 - **KREA 2 T2I** - text-to-image prompt expansion based on [Krea-2's official `expansion.txt`](https://github.com/krea-ai/krea-2/blob/main/docs/expansion.txt) and community research
 - **LTX 2.3 10Eros I2V** - image-to-video motion prompt engineering based on [LTX 2.3 official prompt guide](https://ltx.io/blog/ltx-2-3-prompt-guide) and community research
+- **MiniMax H3 T2V/I2V** - text-to-video and image-to-video prompt generation based on the [official MiniMax H3 Video Prompt Writing Guide](https://huggingface.co/MiniMaxAI/MiniMax-H3/resolve/main/docs/VIDEO_PROMPT_WRITING_GUIDE_base_en.md)
 - **MiniMax H3 R2V** - reference-to-video structured rewrite outputs based on the [official MiniMax H3 Full-Reference Mode guide](https://platform.minimaxi.com/document/minimax-h3-full-reference-mode-guide)
 
 ## Features
@@ -78,7 +79,8 @@ Supports the same dynamic reference images as the single prompt variant.
 |--------------|--------|-------------|
 | `KREA 2 T2I` | KREA 2 Text-to-Image | Prompt expansion for both SFW and NSFW content. Based on [official Krea-2 guidelines](https://github.com/krea-ai/krea-2/blob/main/docs/expansion.txt) and [community research](https://civitai.com/models/2749367) |
 | `LTX 2.3 10Eros I2V` | LTX 2.3 Image-to-Video | Motion prompt engineering for both SFW and NSFW content. Based on [official LTX 2.3 guide](https://ltx.io/blog/ltx-2-3-prompt-guide) and [community research](https://huggingface.co/TenStrip/LTX2.3-10Eros_Workflows) |
-| `MiniMax H3` | MiniMax H3 Reference-to-Video | Structured full-reference rewrite outputs for R2V. Based on the [official MiniMax H3 Full-Reference Mode guide](https://platform.minimaxi.com/document/minimax-h3-full-reference-mode-guide). Handles both SFW and NSFW content. |
+| `MiniMax H3 - base` | MiniMax H3 Text/Image-to-Video | Three-section prompts (`integrated_multimodal_description`, `overall_soundscape`, `non_diegetic_music`) with shot-by-shot camera, audio, and dialogue. Auto-detects T2VA (no images) vs I2VA (reference image(s) as first frame). Based on the [official MiniMax H3 Video Prompt Writing Guide](https://huggingface.co/MiniMaxAI/MiniMax-H3/resolve/main/docs/VIDEO_PROMPT_WRITING_GUIDE_base_en.md). Handles both SFW and NSFW content. |
+| `MiniMax H3 - r2v` | MiniMax H3 Reference-to-Video | Structured full-reference rewrite outputs for R2V. Based on the [official MiniMax H3 Full-Reference Mode guide](https://platform.minimaxi.com/document/minimax-h3-full-reference-mode-guide). Handles both SFW and NSFW content. |
 
 Each preset contains both general and NSFW-specific directives. The LLM detects the content type from your prompt and applies the appropriate rules automatically - no need to switch presets.
 
@@ -166,10 +168,27 @@ The preset handles both SFW and NSFW content automatically based on your prompt.
 
 The reference image(s) let the LLM see the source frame(s) and describe motion relative to what's already visible. Multiple reference images can be connected via Autogrow slots. The preset handles both SFW and NSFW content automatically.
 
-### MiniMax H3 Reference-to-Video
+### MiniMax H3 Text-to-Video (T2V)
 
 ```
-[Load Image] -> [Prompt Enhancer (preset: MiniMax H3, ref_image_0 connected)]
+[CLIP Text Encode] -> [Prompt Enhancer (preset: MiniMax H3 - base)] -> [MiniMax H3 Sampler]
+```
+
+With no reference images connected, the preset outputs the three core sections (`integrated_multimodal_description`, `overall_soundscape`, `non_diegetic_music`) with shot-by-shot camera movement, speaker IDs, and interwoven audio. The LLM builds the complete scene from text.
+
+### MiniMax H3 Image-to-Video (I2V)
+
+```
+[Load Image] -> [Prompt Enhancer (preset: MiniMax H3 - base, ref_image_0 connected)]
+                    -> [PreviewAny] -> [CLIP Text Encode] -> [MiniMax H3 Sampler]
+```
+
+With reference image(s) connected, the preset adds the I2VA instruction prefix (`<Picture N>` anchored at 0.00 seconds in `[Shot 1]`) before the three core sections. The multimodal description derives style, subjects, and composition from the image(s) and describes action that develops forward from the first frame. Multiple reference images can be connected via Autogrow slots. Handles both SFW and NSFW content automatically.
+
+### MiniMax H3 Reference-to-Video (R2V)
+
+```
+[Load Image] -> [Prompt Enhancer (preset: MiniMax H3 - r2v, ref_image_0 connected)]
                     -> [PreviewAny] -> [CLIP Text Encode] -> [MiniMax H3 Sampler]
 ```
 

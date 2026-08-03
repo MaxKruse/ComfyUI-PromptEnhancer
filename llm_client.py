@@ -68,6 +68,17 @@ def _tensor_to_base64_jpeg(image_tensor) -> str:
     return base64.b64encode(buf.getvalue()).decode("ascii")
 
 
+def _images_to_base64_jpegs(images) -> list[str]:
+    """Convert a list of ComfyUI IMAGE tensors to base64-encoded JPEG strings.
+
+    Each tensor can be a single image [H, W, 3] or batch [N, H, W, 3].
+    Batches use the first image. Returns an empty list if no valid images.
+    """
+    if not images:
+        return []
+    return [_tensor_to_base64_jpeg(img) for img in images]
+
+
 def find_free_port() -> int:
     """Find a free TCP port by probing random ports in the ephemeral range."""
     candidates = random.sample(list(_PORT_RANGE), min(100, len(_PORT_RANGE)))
@@ -165,24 +176,25 @@ def chat_completion(
     top_p: float = 0.9,
     top_k: int = 40,
     min_p: float = 0.05,
-    image = None,
+    images = None,
 ) -> str | None:
     """Send a single chat completion request. Returns enhanced prompt or None on failure.
 
-    If *image* is a ComfyUI IMAGE tensor (torch.Tensor [H,W,3] in [0,1]), it is
-    encoded as a base64 JPEG and sent alongside the text prompt so the LLM can
-    see the reference image.
+    If *images* is a list of ComfyUI IMAGE tensors (torch.Tensor [H,W,3] in [0,1]),
+    each is encoded as a base64 JPEG and sent alongside the text prompt so the LLM
+    can see all reference images.
     """
     # Build user message content
-    if image is not None:
-        image_b64 = _tensor_to_base64_jpeg(image)
+    if images:
+        image_b64s = _images_to_base64_jpegs(images)
         user_content = [
             {"type": "text", "text": user_prompt},
-            {
-                "type": "image_url",
-                "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"},
-            },
         ]
+        for b64 in image_b64s:
+            user_content.append({
+                "type": "image_url",
+                "image_url": {"url": f"data:image/jpeg;base64,{b64}"},
+            })
     else:
         user_content = user_prompt
 
@@ -319,7 +331,7 @@ def enhance_prompt(
     min_p: float = 0.05,
     max_retries: int = 5,
     min_words: int = 25,
-    image = None,
+    images = None,
 ) -> str | None:
     """Enhance a prompt by spawning a temporary llama-server instance.
 
@@ -411,7 +423,7 @@ def enhance_prompt(
             top_p=top_p,
             top_k=top_k,
             min_p=min_p,
-            image=image,
+            images=images,
         )
 
         if result and is_good_prompt(result, user_prompt, min_words=min_words):

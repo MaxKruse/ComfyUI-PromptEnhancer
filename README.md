@@ -8,15 +8,17 @@ Drop this into your `custom_nodes/` directory. No API keys needed - runs entirel
 
 - **KREA 2 T2I** - text-to-image prompt expansion based on [Krea-2's official `expansion.txt`](https://github.com/krea-ai/krea-2/blob/main/docs/expansion.txt) and community research
 - **LTX 2.3 10Eros I2V** - image-to-video motion prompt engineering based on [LTX 2.3 official prompt guide](https://ltx.io/blog/ltx-2-3-prompt-guide) and community research
+- **MiniMax H3 R2V** - reference-to-video prompt expansion for identity and style transfer
 
 ## Features
 
-- **Auto-detecting presets**: 2 built-in presets that handle both SFW and NSFW content automatically via in-prompt directives
-- **Reference image**: Send an image to the LLM alongside your prompt (requires a multimodal GGUF + `--mmproj` flag)
+- **Auto-detecting presets**: Built-in presets that handle both SFW and NSFW content automatically via in-prompt directives
+- **Dynamic reference images**: Connect 0-9 reference images via Autogrow slots (requires a multimodal GGUF + `--mmproj` flag)
+- **Bypass-safe**: When the node is disabled/bypassed, the original prompt passes through unchanged
+- **Workflow persistence**: Enhanced prompt values are saved in the workflow JSON and preserved across sessions
 - **VRAM-aware**: Automatically unloads ComfyUI models before spawning llama-server, then frees memory after
 - **Retry loop**: Keeps trying until a quality, unique prompt is generated
 - **Quality validation**: Rejects refusals, short outputs, and prompts too similar to the original
-- **Sampling control**: `temperature`, `top_p`, `top_k`, `min_p` support
 - **Batch mode**: Enhance multiple prompts sequentially
 
 ## Recommended Models
@@ -50,24 +52,21 @@ Single prompt enhancement with retry loop.
 
 | Input | Type | Description |
 |-------|------|-------------|
-| `preset` | Dropdown | System prompt preset (determines target model and expansion style) |
 | `prompt` | String | Your base prompt. The preset auto-detects SFW vs NSFW content |
+| `preset` | Dropdown | System prompt preset (determines target model and expansion style) |
 | `llm_model_path` | String | Path to your `.gguf` model |
 | `llama_server_path` | String | Path to `llama-server` binary (default: `llama-server`) |
-| `seed` | Seed | Random seed for generation |
-| `temperature` | Float | 0.1-2.0 (default: 1.0) |
-| `top_p` | Float | 0.1-1.0 (default: 0.95) |
-| `top_k` | Int | 1-200 (default: 64) |
-| `min_p` | Float | 0.0-1.0 (default: 0.01) |
-| `max_retries` | Int | 1-20 (default: 5) |
-| `reference_image` | Image | Optional - sent to multimodal LLMs for visual context |
-| `extra_flags` | String | Extra llama-server flags (e.g. `--no-mmap --threads 12 -ngl 99`) |
+| `ref_image_0` .. `ref_image_8` | Image | Optional dynamic reference images (0-9 slots via Autogrow) |
 
 **Output:** `enhanced_prompt` - the LLM-enhanced prompt
+
+**Bypass behavior:** When the node is disabled or bypassed, the original `prompt` passes through to `enhanced_prompt` unchanged.
 
 ### Prompt Enhancer (Batch)
 
 Enhance multiple prompts (one per line). Each gets its own server session with quality validation.
+
+Supports the same dynamic reference images as the single prompt variant.
 
 ## Presets
 
@@ -75,6 +74,7 @@ Enhance multiple prompts (one per line). Each gets its own server session with q
 |--------------|--------|-------------|
 | `KREA 2 T2I` | KREA 2 Text-to-Image | Prompt expansion for both SFW and NSFW content. Based on [official Krea-2 guidelines](https://github.com/krea-ai/krea-2/blob/main/docs/expansion.txt) and [community research](https://civitai.com/models/2749367) |
 | `LTX 2.3 10Eros I2V` | LTX 2.3 Image-to-Video | Motion prompt engineering for both SFW and NSFW content. Based on [official LTX 2.3 guide](https://ltx.io/blog/ltx-2-3-prompt-guide) and [community research](https://huggingface.co/TenStrip/LTX2.3-10Eros_Workflows) |
+| `MiniMax H3` | MiniMax H3 R2V | Reference-to-video prompt expansion for identity and style transfer |
 
 Each preset contains both general and NSFW-specific directives. The LLM detects the content type from your prompt and applies the appropriate rules automatically - no need to switch presets.
 
@@ -100,7 +100,9 @@ Add `.txt` files to the `presets/` directory. Use the naming convention `<target
 
 ## Reference Images (Multimodal)
 
-For I2V workflows, connect a reference image so the LLM can see the source frame and tailor the motion prompt to match. Requires:
+Connect reference images via the dynamic Autogrow slots (`ref_image_0`, `ref_image_1`, etc.). Up to 9 images can be connected. The LLM sees all connected images and tailors the prompt accordingly.
+
+Requires:
 
 - A multimodal GGUF model (e.g. `gemma-4-31B-it-QAT`)
 - The multimodal projector in `extra_flags`:
@@ -139,7 +141,7 @@ No `--mmproj` by default - optional if you want to send a reference image as a v
   --spec-type draft-mtp
 ```
 
-Adds `--mmproj` for vision input so the LLM can see the reference image. Same speculative decoding setup.
+Adds `--mmproj` for vision input so the LLM can see the reference image(s). Same speculative decoding setup.
 
 ## Example Workflows
 
@@ -154,11 +156,11 @@ The preset handles both SFW and NSFW content automatically based on your prompt.
 ### LTX 2.3 Image-to-Video
 
 ```
-[Load Image] -> [Prompt Enhancer (preset: LTX 2.3 10Eros I2V, reference_image connected)]
+[Load Image] -> [Prompt Enhancer (preset: LTX 2.3 10Eros I2V, ref_image_0 connected)]
                         -> [PreviewAny] -> [CLIP Text Encode] -> [LTX 2.3 Sampler]
 ```
 
-The reference image lets the LLM see the source frame and describe motion relative to what's already visible. The preset handles both SFW and NSFW content automatically.
+The reference image(s) let the LLM see the source frame(s) and describe motion relative to what's already visible. Multiple reference images can be connected via Autogrow slots. The preset handles both SFW and NSFW content automatically.
 
 ## VRAM Management
 
@@ -166,7 +168,7 @@ The node automatically:
 1. Calls `comfy.model_management.unload_all_models()` to free VRAM
 2. Runs `gc.collect()` and `torch.cuda.empty_cache()`
 3. Spawns llama-server on a free port
-4. Sends your prompt (and optional image) and collects the response
+4. Sends your prompt (and optional images) and collects the response
 5. Kills the server
 6. Returns the enhanced prompt
 
@@ -180,3 +182,4 @@ This means the LLM and ComfyUI models don't compete for VRAM.
 - **Refusal outputs**: Try a less-aligned model or increase temperature
 - **Slow generation**: Use a smaller model or add `-ngl 99` for full GPU offload
 - **Reference image not working**: Make sure your model is multimodal and you passed `--mmproj` in extra_flags
+- **Enhanced prompt not saved**: The enhanced prompt is a STRING output that is automatically saved in the workflow JSON. Wire it to downstream nodes (e.g., CLIP Text Encode) and the value persists across sessions.

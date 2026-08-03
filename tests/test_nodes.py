@@ -109,7 +109,7 @@ def test_preset_dropdown_has_clear_display_names():
     # Base presets use just the model name (no suffix), custom presets use "Model - Style" format
     for opt in options:
         # Either has a " - " separator (custom preset) or is a base model name
-        assert " - " in opt or opt in ["KREA 2 T2I", "LTX 2.3 10Eros I2V"], (
+        assert " - " in opt or opt in ["KREA 2 T2I", "LTX 2.3 10Eros I2V", "MiniMax H3"], (
             f"Display name should use ' - ' separator or be a base model name: {opt}"
         )
 

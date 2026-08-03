@@ -175,10 +175,6 @@ def chat_completion(
     system_prompt: str,
     user_prompt: str,
     *,
-    temperature: float = 0.9,
-    top_p: float = 0.9,
-    top_k: int = 40,
-    min_p: float = 0.05,
     images = None,
 ) -> str | None:
     """Send a single chat completion request. Returns enhanced prompt or None on failure.
@@ -186,6 +182,9 @@ def chat_completion(
     If *images* is a list of ComfyUI IMAGE tensors (torch.Tensor [H,W,3] in [0,1]),
     each is encoded as a base64 JPEG and sent alongside the text prompt so the LLM
     can see all reference images.
+
+    Sampling parameters (temperature, top_p, etc.) are not sent in the payload;
+    the server uses its own defaults or command-line settings.
     """
     # Build user message content
     if images:
@@ -207,10 +206,6 @@ def chat_completion(
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_content},
         ],
-        "temperature": temperature,
-        "top_p": top_p,
-        "top_k": top_k,
-        "min_p": min_p,
     }
 
     data = json.dumps(payload).encode("utf-8")
@@ -331,10 +326,6 @@ def enhance_prompt(
     seed: int = 0,
     mmproj_path: str = "",
     extra_flags: str = "",
-    temperature: float = 0.9,
-    top_p: float = 0.9,
-    top_k: int = 40,
-    min_p: float = 0.05,
     max_retries: int = 5,
     min_words: int = 25,
     images = None,
@@ -424,8 +415,7 @@ def enhance_prompt(
 
     for attempt in range(1, max_retries + 1):
         _print_safe(
-            f"  [PromptEnhancer] Attempt {attempt}/{max_retries} "
-            f"(temp={temperature}, top_p={top_p}, top_k={top_k}, min_p={min_p})..."
+            f"  [PromptEnhancer] Attempt {attempt}/{max_retries}..."
         )
 
         result = chat_completion(
@@ -433,10 +423,6 @@ def enhance_prompt(
             model_name=model_name,
             system_prompt=system_prompt,
             user_prompt=user_prompt,
-            temperature=temperature,
-            top_p=top_p,
-            top_k=top_k,
-            min_p=min_p,
             images=images,
         )
 

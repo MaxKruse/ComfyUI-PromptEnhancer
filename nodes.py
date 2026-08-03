@@ -5,6 +5,7 @@ and MiniMax H3 Reference-to-Video (minimax-h3-r2v).
 
 Each preset handles both SFW and NSFW content via in-prompt directives.
 The target model is determined automatically from the selected preset.
+Sampling parameters are left to the llama-server defaults or command-line flags.
 """
 
 from __future__ import annotations
@@ -124,9 +125,10 @@ def _resolve_preset_key(preset_display: str) -> str | None:
 class PromptEnhancer(ComfyNode):
     """Enhance a prompt using a local LLM (llama-server).
 
-    Supports KREA-2 T2I and LTX 2.3 10Eros I2V via presets.
+    Supports KREA-2 T2I, LTX 2.3 10Eros I2V, and MiniMax H3 R2V via presets.
     Each preset handles both SFW and NSFW content automatically.
     The target model is determined by the selected preset.
+    Sampling parameters are left to the llama-server defaults.
 
     This node:
     1. Unloads all ComfyUI models to free VRAM
@@ -151,7 +153,7 @@ class PromptEnhancer(ComfyNode):
             category="Prompt Enhancer",
             description=(
                 "Enhance prompts using a local LLM via llama-server. "
-                "Supports KREA-2 (T2I) and LTX 2.3 10Eros (I2V) via presets. "
+                "Supports KREA-2 (T2I), LTX 2.3 10Eros (I2V), and MiniMax H3 (R2V) via presets. "
                 "Each preset handles both SFW and NSFW content automatically. "
                 "Unloads models, runs LLM with retry loop, returns unique enhanced prompt."
             ),

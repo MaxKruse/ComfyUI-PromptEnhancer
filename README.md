@@ -8,11 +8,12 @@ Drop this into your `custom_nodes/` directory. No API keys needed - runs entirel
 
 - **KREA 2 T2I** - text-to-image prompt expansion based on [Krea-2's official `expansion.txt`](https://github.com/krea-ai/krea-2/blob/main/docs/expansion.txt) and community research
 - **LTX 2.3 10Eros I2V** - image-to-video motion prompt engineering based on [LTX 2.3 official prompt guide](https://ltx.io/blog/ltx-2-3-prompt-guide) and community research
-- **MiniMax H3 R2V** - reference-to-video prompt expansion for identity and style transfer
+- **MiniMax H3 R2V** - reference-to-video structured rewrite outputs based on the [official MiniMax H3 Full-Reference Mode guide](https://platform.minimaxi.com/document/minimax-h3-full-reference-mode-guide)
 
 ## Features
 
 - **Auto-detecting presets**: Built-in presets that handle both SFW and NSFW content automatically via in-prompt directives
+- **Server-side sampling**: Sampling parameters are left to the llama-server defaults or command-line flags
 - **Dynamic reference images**: Connect 0-9 reference images via Autogrow slots (requires a multimodal GGUF + `--mmproj` flag)
 - **Bypass-safe**: When the node is disabled/bypassed, the original prompt passes through unchanged
 - **Workflow persistence**: Enhanced prompt values are saved in the workflow JSON and preserved across sessions
@@ -77,7 +78,7 @@ Supports the same dynamic reference images as the single prompt variant.
 |--------------|--------|-------------|
 | `KREA 2 T2I` | KREA 2 Text-to-Image | Prompt expansion for both SFW and NSFW content. Based on [official Krea-2 guidelines](https://github.com/krea-ai/krea-2/blob/main/docs/expansion.txt) and [community research](https://civitai.com/models/2749367) |
 | `LTX 2.3 10Eros I2V` | LTX 2.3 Image-to-Video | Motion prompt engineering for both SFW and NSFW content. Based on [official LTX 2.3 guide](https://ltx.io/blog/ltx-2-3-prompt-guide) and [community research](https://huggingface.co/TenStrip/LTX2.3-10Eros_Workflows) |
-| `MiniMax H3` | MiniMax H3 R2V | Reference-to-video prompt expansion for identity and style transfer |
+| `MiniMax H3` | MiniMax H3 Reference-to-Video | Structured full-reference rewrite outputs for R2V. Based on the [official MiniMax H3 Full-Reference Mode guide](https://platform.minimaxi.com/document/minimax-h3-full-reference-mode-guide). Handles both SFW and NSFW content. |
 
 Each preset contains both general and NSFW-specific directives. The LLM detects the content type from your prompt and applies the appropriate rules automatically - no need to switch presets.
 
@@ -165,6 +166,15 @@ The preset handles both SFW and NSFW content automatically based on your prompt.
 
 The reference image(s) let the LLM see the source frame(s) and describe motion relative to what's already visible. Multiple reference images can be connected via Autogrow slots. The preset handles both SFW and NSFW content automatically.
 
+### MiniMax H3 Reference-to-Video
+
+```
+[Load Image] -> [Prompt Enhancer (preset: MiniMax H3, ref_image_0 connected)]
+                    -> [PreviewAny] -> [CLIP Text Encode] -> [MiniMax H3 Sampler]
+```
+
+The preset outputs structured full-reference rewrite sections (`subject_definitions`, `summary`, `retention_analysis`, `detailed_description`, `overall_soundscape`, `non_diegetic_music`). Reference labels (`<Subject N>`, `<Picture N>`, `<Audio N>`) track identity across all sections. Handles both SFW and NSFW content automatically.
+
 ## VRAM Management
 
 The node automatically:
@@ -182,7 +192,7 @@ This means the LLM and ComfyUI models don't compete for VRAM.
 - **Server fails to start**: Check that `llama-server` is in your PATH or provide the full path
 - **Model not found**: Verify the `.gguf` file path is correct (absolute or relative to ComfyUI root)
 - **Out of memory**: Reduce model size (Q4 -> Q3) or add `--ctx-size 4096` to extra_flags
-- **Refusal outputs**: Try a less-aligned model or increase temperature
+- **Refusal outputs**: Try a less-aligned model
 - **Slow generation**: Use a smaller model or add `-ngl 99` for full GPU offload
 - **Reference image not working**: Make sure your model is multimodal and you passed `--mmproj` in extra_flags
 - **Enhanced prompt not saved**: The enhanced prompt is a STRING output that is automatically saved in the workflow JSON. Wire it to downstream nodes (e.g., CLIP Text Encode) and the value persists across sessions.

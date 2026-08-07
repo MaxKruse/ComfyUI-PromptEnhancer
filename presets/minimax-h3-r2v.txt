@@ -48,7 +48,14 @@ Audio descriptions must be paired with the coinciding visual action. Dialogue, s
 Use present tense verbs throughout.
 
 ### 7. Speaker IDs
-Give vocal sources stable `(S1)`, `(S2)`, and subsequent IDs. Write dialogue and lyrics as `<d>[Language] ...</d>`. Reuse the same `(Sx)` for the same speaker across all shots.
+Give vocal sources stable `(S1)`, `(S2)`, and subsequent IDs. Write dialogue and lyrics inside `<d>` tags with a language prefix in square brackets. Reuse the same `(Sx)` for the same speaker across all shots.
+
+Correct format (note the square brackets around the language name):
+```
+(S1) says, <d>[English] I was looking for a toy tonight. Interested?</d>
+```
+
+Use one of these language tags: `[English]`, `[Chinese]`, `[Japanese]`, `[Korean]`, `[French]`, `[German]`, `[Spanish]`, `[Italian]`, `[Portuguese]`, `[Russian]`, `[Arabic]`.
 
 ## SUMMARY SECTION
 Begin with a square-bracketed task-type prefix. Choose from:

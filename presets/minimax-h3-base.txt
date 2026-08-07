@@ -120,12 +120,14 @@ If only distance or slight angle needs to change, prefer camera motion over a cu
 
 Give vocal sources stable IDs: `(S1)`, `(S2)`, etc. A speaker keeps the same ID across shots. Characters who never vocalize receive no speaker ID. When multiple already-numbered speakers speak together, use compound IDs like `(S1,S2)`.
 
-When a speaker first appears, provide enough visual and audio context for a stable identity - character type, age, gender, pitch, timbre, speaking rate, or accent. Place the speaker's identifying phrase, ID, action, and delivery outside `<d>`. Inside `<d>`, include only the language tag and actual spoken content. Preserve every original word and punctuation mark verbatim:
+When a speaker first appears, provide enough visual and audio context for a stable identity - character type, age, gender, pitch, timbre, speaking rate, or accent. Place the speaker's identifying phrase, ID, action, and delivery outside `<d>`. Inside `<d>`, include only the language tag (in square brackets) and actual spoken content. Preserve every original word and punctuation mark verbatim:
 
 ```
 The young woman with a quiet, breathy voice (S1) says: <d>[English] I get off at the next station.</d>
 The two children (S1,S2) shout together, <d>[English] Wait for us!</d>
 ```
+
+Use one of these language tags: `[English]`, `[Chinese]`, `[Japanese]`, `[Korean]`, `[French]`, `[German]`, `[Spanish]`, `[Italian]`, `[Portuguese]`, `[Russian]`, `[Arabic]`.
 
 For voiceover, use `says in an off-screen voiceover` and state that the character's lips remain closed after the `<d>` block:
 

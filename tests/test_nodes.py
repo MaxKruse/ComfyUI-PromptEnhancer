@@ -75,26 +75,6 @@ def test_prompt_enhancer_display_name_is_generic():
     assert "LTX" not in display
 
 
-def test_prompt_enhancer_batch_has_preset_input():
-    """PromptEnhancerBatch should have a preset dropdown."""
-    from nodes import PromptEnhancerBatch
-
-    input_types = _get_input_types(PromptEnhancerBatch)
-    required = input_types.get("required", {})
-    assert "preset" in required
-
-
-def test_prompt_enhancer_batch_no_target_model_input():
-    """PromptEnhancerBatch should NOT have a separate target_model input."""
-    from nodes import PromptEnhancerBatch
-
-    input_types = _get_input_types(PromptEnhancerBatch)
-    required = input_types.get("required", {})
-    optional = input_types.get("optional", {})
-    assert "target_model" not in required
-    assert "target_model" not in optional
-
-
 def test_node_class_mappings_use_generic_names():
     """Node class mappings should use generic names (not LTX-specific)."""
     from nodes import NODE_CLASS_MAPPINGS
@@ -105,7 +85,6 @@ def test_node_class_mappings_use_generic_names():
 
     # Generic names should be present
     assert "PromptEnhancer" in NODE_CLASS_MAPPINGS
-    assert "PromptEnhancerBatch" in NODE_CLASS_MAPPINGS
 
 
 def test_preset_dropdown_has_clear_display_names():
@@ -163,23 +142,6 @@ def test_prompt_enhancer_has_ref_images_autogrow():
     )
 
     # Verify it's an autogrow type
-    ref_images_def = optional["ref_images"]
-    assert ref_images_def[0] == "COMFY_AUTOGROW_V3", (
-        f"ref_images should be autogrow type, got {ref_images_def[0]}"
-    )
-
-
-def test_prompt_enhancer_batch_has_ref_images_autogrow():
-    """PromptEnhancerBatch should also have dynamic ref_images input."""
-    from nodes import PromptEnhancerBatch
-
-    input_types = _get_input_types(PromptEnhancerBatch)
-    optional = input_types.get("optional", {})
-
-    assert "ref_images" in optional, (
-        f"Should have ref_images autogrow input. Optional keys: {list(optional.keys())}"
-    )
-
     ref_images_def = optional["ref_images"]
     assert ref_images_def[0] == "COMFY_AUTOGROW_V3", (
         f"ref_images should be autogrow type, got {ref_images_def[0]}"

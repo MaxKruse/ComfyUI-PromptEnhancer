@@ -14,6 +14,7 @@ Drop this into your `custom_nodes/` directory. No API keys needed - runs entirel
 ## Features
 
 - **Auto-detecting presets**: Built-in presets that handle both SFW and NSFW content automatically via in-prompt directives
+- **Uncensored directive**: System prompts are prepended with an uncensored instruction to reduce refusals and ensure the model follows instructions
 - **Server-side sampling**: Sampling parameters are left to the llama-server defaults or command-line flags
 - **Dynamic reference images**: Connect 0-9 reference images via Autogrow slots (requires a multimodal GGUF + `--mmproj` flag)
 - **Bypass-safe**: When the node is disabled/bypassed, the original prompt passes through unchanged

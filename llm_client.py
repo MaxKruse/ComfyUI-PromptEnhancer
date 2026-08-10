@@ -13,6 +13,7 @@ import gc
 import io
 import json
 import logging
+import os
 import random
 import socket
 import subprocess
@@ -58,9 +59,14 @@ def _tensor_to_base64_jpeg(image_tensor) -> str:
     # Clamp to [0, 1], convert to uint8, move to CPU
     img = image_tensor.clamp(0, 1).mul(255).byte().cpu()
 
+    # Ensure contiguous memory for PIL
+    np_img = img.numpy()
+    if not np_img.flags['C_CONTIGUOUS']:
+        np_img = np.ascontiguousarray(np_img)
+
     # Convert to PIL
     from PIL import Image
-    pil_img = Image.fromarray(img.numpy(), mode="RGB")
+    pil_img = Image.fromarray(np_img)
 
     # Encode as JPEG
     buf = io.BytesIO()
@@ -316,6 +322,49 @@ def kill_server(proc: subprocess.Popen | None):
         _print_safe(f"  [PromptEnhancer] llama-server (pid={pid}) stopped.")
 
 
+def _start_llama_server(server_path: str, model_path: str, port: int, ctx_size: int, seed: int, mmproj_path: str, extra_flags: str) -> tuple[subprocess.Popen | None, str, float]:
+    """Start llama-server and wait until healthy. Returns proc, base_url, start_time."""
+    cmd = build_command(server_path, model_path, port, ctx_size=ctx_size, seed=seed, mmproj_path=mmproj_path, extra_flags=extra_flags)
+    _print_safe(f"  [PromptEnhancer] Running llama-server (model: {Path(model_path).name}, port: {port})...")
+    creationflags = 0
+    if sys.platform == "win32":
+        creationflags = subprocess.CREATE_NO_WINDOW
+    try:
+        proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=creationflags)
+        _print_safe(f"  [PromptEnhancer] Started llama-server (pid={proc.pid})")
+    except FileNotFoundError:
+        logger.error("[PromptEnhancer] llama-server not found at: %s", server_path)
+        return None, "", 0.0
+    except Exception:
+        logger.exception("[PromptEnhancer] Failed to start llama-server")
+        return None, "", 0.0
+    base_url = f"http://127.0.0.1:{port}"
+    start = time.monotonic()
+    if not wait_for_server(base_url, timeout=_SERVER_STARTUP_TIMEOUT):
+        logger.error("[PromptEnhancer] Server did not become healthy within %ds", _SERVER_STARTUP_TIMEOUT)
+        kill_server(proc)
+        return None, "", 0.0
+    return proc, base_url, start
+
+
+def _run_retry_loop(base_url: str, model_name: str, system_prompt: str, user_prompt: str, images, max_retries: int, min_words: int) -> str | None:
+    """Run chat completions with retry until quality passes."""
+    best_result: str | None = None
+    for attempt in range(1, max_retries + 1):
+        _print_safe(f"  [PromptEnhancer] Attempt {attempt}/{max_retries}...")
+        result = chat_completion(base_url=base_url, model_name=model_name, system_prompt=system_prompt, user_prompt=user_prompt, images=images)
+        if result and is_good_prompt(result, user_prompt, min_words=min_words):
+            _print_safe(f"  [PromptEnhancer] ✓ Accepted on attempt {attempt} ({len(result)} chars)")
+            return result
+        elif result:
+            _print_safe(f"  [PromptEnhancer] ✗ Rejected attempt {attempt} — quality check failed ({len(result)} chars)")
+            if best_result is None:
+                best_result = result
+        else:
+            _print_safe(f"  [PromptEnhancer] ✗ Rejected attempt {attempt} — empty/failed response")
+    return best_result
+
+
 def enhance_prompt(
     server_path: str,
     model_path: str,
@@ -330,126 +379,36 @@ def enhance_prompt(
     min_words: int = 25,
     images = None,
 ) -> str | None:
-    """Enhance a prompt by spawning a temporary llama-server instance.
+    """Enhance a prompt by spawning a temporary llama-server instance."""
+    if images and not mmproj_path:
+        logger.error("[PromptEnhancer] Images provided but mmproj_path is empty. Images will be ignored.")
+        images = None
 
-    Retries up to max_retries times until is_good_prompt() passes.
-    The server is spawned ONCE and kept alive across retries for efficiency.
+    if not model_path or not os.path.isabs(model_path):
+        logger.error("[PromptEnhancer] Model path must be absolute, got: %s", model_path)
+        return None
 
-    1. Free GPU memory (unload ComfyUI models).
-    2. Find a free port and start llama-server.
-    3. Wait for /health to confirm ready.
-    4. Send the prompt via /v1/chat/completions — retry until good result.
-    5. Kill the server.
-    6. Return the enhanced prompt text, or None on failure.
-    """
     model_path_resolved = Path(model_path).resolve()
     if not model_path_resolved.is_file():
-        _print_safe(f"  [PromptEnhancer] ERROR: Model file not found: {model_path}")
+        logger.error("[PromptEnhancer] Model file not found: %s", model_path)
         return None
 
-    # Step 1: Free GPU memory
     free_gpu_memory()
 
-    # Step 2: Find port and build command
     port = find_free_port()
-    base_url = f"http://127.0.0.1:{port}"
-    cmd = build_command(
-        server_path,
-        model_path,
-        port,
-        ctx_size=ctx_size,
-        seed=seed,
-        mmproj_path=mmproj_path,
-        extra_flags=extra_flags,
+    server_proc, base_url, start = _start_llama_server(
+        server_path, model_path, port, ctx_size, seed, mmproj_path, extra_flags
     )
-
-    _print_safe(f"  [PromptEnhancer] Running llama-server (model: {model_path_resolved.name}, port: {port})...")
-    _print_safe(f"  [PromptEnhancer] Command: {' '.join(cmd)}")
-
-    # Windows: prevent console window popup
-    creationflags = 0
-    if sys.platform == "win32":
-        creationflags = subprocess.CREATE_NO_WINDOW  # type: ignore[attr-defined]
-
-    server_proc: subprocess.Popen | None = None
-    try:
-        server_proc = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            creationflags=creationflags,
-        )
-        _print_safe(f"  [PromptEnhancer] Started llama-server (pid={server_proc.pid})")
-    except FileNotFoundError:
-        _print_safe(f"  [PromptEnhancer] ERROR: llama-server not found at: {server_path}")
-        return None
-    except Exception:
-        logger.exception("[PromptEnhancer] Failed to start llama-server")
+    if server_proc is None:
         return None
 
-    # Step 3: Wait for health
-    _print_safe(f"  [PromptEnhancer] Waiting for server (timeout: {_SERVER_STARTUP_TIMEOUT}s)...")
-    start = time.monotonic()
-
-    if not wait_for_server(base_url, timeout=_SERVER_STARTUP_TIMEOUT):
-        elapsed = time.monotonic() - start
-        _print_safe(f"  [PromptEnhancer] ERROR: Server did not become healthy within {_SERVER_STARTUP_TIMEOUT}s ({elapsed:.1f}s elapsed)")
-
-        # Log stderr if process crashed
-        if server_proc.poll() is not None:
-            try:
-                stderr = server_proc.stderr.read().decode("utf-8", errors="replace") if server_proc.stderr else ""
-                _print_safe(f"  [PromptEnhancer] Server stderr (last 500 chars):\n{stderr[-500:]}")
-            except Exception:
-                pass
-
-        kill_server(server_proc)
-        return None
-
-    ready_time = time.monotonic()
     model_name = discover_model_name(base_url)
+    ready_time = time.monotonic()
     _print_safe(f"  [PromptEnhancer] Server ready in {ready_time - start:.1f}s. Model: {model_name}")
 
-    # Step 4: Retry loop — keep trying until we get a good prompt
-    best_result: str | None = None
-
-    for attempt in range(1, max_retries + 1):
-        _print_safe(
-            f"  [PromptEnhancer] Attempt {attempt}/{max_retries}..."
-        )
-
-        result = chat_completion(
-            base_url=base_url,
-            model_name=model_name,
-            system_prompt=system_prompt,
-            user_prompt=user_prompt,
-            images=images,
-        )
-
-        if result and is_good_prompt(result, user_prompt, min_words=min_words):
-            _print_safe(f"  [PromptEnhancer] ✓ Accepted on attempt {attempt} ({len(result)} chars)")
-            best_result = result
-            break
-        elif result:
-            _print_safe(f"  [PromptEnhancer] ✗ Rejected attempt {attempt} — quality check failed ({len(result) if result else 0} chars)")
-            # Keep as fallback if nothing else works
-            if best_result is None:
-                best_result = result
-        else:
-            _print_safe(f"  [PromptEnhancer] ✗ Rejected attempt {attempt} — empty/failed response")
+    best_result = _run_retry_loop(base_url, model_name, system_prompt, user_prompt, images, max_retries, min_words)
 
     elapsed = time.monotonic() - ready_time
-
-    # Step 5: Kill server
-    # Log stderr if all attempts failed — the server may have crashed on the request
-    if best_result is None and server_proc is not None and server_proc.stderr:
-        try:
-            stderr_raw = server_proc.stderr.read().decode("utf-8", errors="replace")
-            if stderr_raw.strip():
-                _print_safe(f"  [PromptEnhancer] Server stderr (last 1000 chars):\n{stderr_raw[-1000:]}")
-        except Exception:
-            pass
-
     kill_server(server_proc)
 
     if best_result:
@@ -458,6 +417,6 @@ def enhance_prompt(
             f"{best_result[:120]}{'...' if len(best_result) > 120 else ''}"
         )
     else:
-        _print_safe(f"  [PromptEnhancer] ERROR: All {max_retries} attempts failed ({elapsed:.1f}s total)")
+        logger.error("[PromptEnhancer] All %d attempts failed (%s s total)", max_retries, f"{elapsed:.1f}")
 
     return best_result

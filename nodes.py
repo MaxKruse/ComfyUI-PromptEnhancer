@@ -10,11 +10,14 @@ Sampling parameters are left to the llama-server defaults or command-line flags.
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 from comfy_api.latest import io
 
 ComfyNode = io.ComfyNode
+
+logger = logging.getLogger(__name__)
 
 # Support both package imports (ComfyUI) and direct imports (tests)
 try:
@@ -48,21 +51,34 @@ def _get_comfy_base_path() -> str:
 
 
 def _resolve_path(raw: str, fallback: str = "") -> str:
-    """Resolve a path string: relative -> absolute via ComfyUI base.
+    """Resolve a server binary path. Bare command names are returned as-is.
 
-    Bare command names (no path separators) are returned as-is so
-    the OS can resolve them via PATH - this is how llama-server
-    should be found when it's installed globally."""
+    File paths must be absolute. Relative paths are rejected with a log error.
+    """
     import os
 
     path = raw.strip()
     if not path:
         return fallback
-    # If it contains a separator it's a file path; otherwise treat as a
-    # command name and let the OS resolve it via PATH.
-    if not os.path.isabs(path) and ("/" in path or "\\" in path):
-        comfy_base = _get_comfy_base_path()
-        path = os.path.join(comfy_base, path)
+    # Bare command name – no separator
+    if "/" not in path and "\\" not in path:
+        return path
+    # Must be absolute
+    if not os.path.isabs(path):
+        logger.error("[PromptEnhancer] Path must be absolute, got relative path: %s", path)
+        return fallback
+    return path
+
+
+def _require_absolute_path(raw: str, name: str) -> str:
+    """Require an absolute file path. Logs error if relative."""
+    import os
+    path = raw.strip()
+    if not path:
+        return ""
+    if not os.path.isabs(path):
+        logger.error("[PromptEnhancer] %s must be an absolute path, got: %s", name, path)
+        return ""
     return path
 
 
@@ -207,11 +223,27 @@ class PromptEnhancer(ComfyNode):
                 io.Int.Input(
                     "seed",
                     default=0,
-                    min=0,
+                    min=-1,
                     max=2**63 - 1,
                     step=1,
                     tooltip="Random seed for LLM generation. Use -1 for random seed each time.",
                     control_after_generate=io.ControlAfterGenerate.randomize,
+                ),
+                io.Int.Input(
+                    "max_retries",
+                    default=5,
+                    min=1,
+                    max=20,
+                    step=1,
+                    tooltip="Maximum number of generation attempts until a quality prompt is accepted.",
+                ),
+                io.Int.Input(
+                    "min_words",
+                    default=25,
+                    min=10,
+                    max=500,
+                    step=1,
+                    tooltip="Minimum word count for an accepted enhanced prompt.",
                 ),
                 # Optional inputs
                 io.String.Input(
@@ -267,6 +299,8 @@ class PromptEnhancer(ComfyNode):
         llama_server_path: str,
         ctx_size: int,
         seed: int,
+        max_retries: int,
+        min_words: int,
         ref_images: dict[str, any] | None = None,
         mmproj_path: str = "",
         extra_server_args: str = "",
@@ -283,9 +317,9 @@ class PromptEnhancer(ComfyNode):
         user_prompt = prompt.strip()
 
         # Resolve paths
-        model_path = _resolve_path(llm_model_path)
+        model_path = _require_absolute_path(llm_model_path, "llm_model_path")
         server_path = _resolve_path(llama_server_path, DEFAULT_SERVER_PATH)
-        mmproj = _resolve_path(mmproj_path) if mmproj_path else ""
+        mmproj = _require_absolute_path(mmproj_path, "mmproj_path") if mmproj_path else ""
 
         # Collect reference images from autogrow dict
         images = []
@@ -303,6 +337,8 @@ class PromptEnhancer(ComfyNode):
             user_prompt=user_prompt,
             ctx_size=ctx_size,
             seed=seed,
+            max_retries=max_retries,
+            min_words=min_words,
             images=images,
             mmproj_path=mmproj,
             extra_flags=extra_server_args,
@@ -372,10 +408,26 @@ class PromptEnhancerBatch(ComfyNode):
                 io.Int.Input(
                     "seed",
                     default=0,
-                    min=0,
+                    min=-1,
                     max=2**63 - 1,
                     step=1,
                     control_after_generate=io.ControlAfterGenerate.randomize,
+                ),
+                io.Int.Input(
+                    "max_retries",
+                    default=5,
+                    min=1,
+                    max=20,
+                    step=1,
+                    tooltip="Maximum number of generation attempts per prompt.",
+                ),
+                io.Int.Input(
+                    "min_words",
+                    default=25,
+                    min=10,
+                    max=500,
+                    step=1,
+                    tooltip="Minimum word count for an accepted enhanced prompt.",
                 ),
                 io.String.Input(
                     "mmproj_path",
@@ -421,6 +473,8 @@ class PromptEnhancerBatch(ComfyNode):
         llama_server_path: str,
         ctx_size: int,
         seed: int,
+        max_retries: int,
+        min_words: int,
         ref_images: dict[str, any] | None = None,
         mmproj_path: str = "",
         extra_server_args: str = "",
@@ -437,9 +491,9 @@ class PromptEnhancerBatch(ComfyNode):
             return io.NodeOutput("\n".join(raw_prompts))
 
         # Resolve paths
-        model_path = _resolve_path(llm_model_path)
+        model_path = _require_absolute_path(llm_model_path, "llm_model_path")
         server_path = _resolve_path(llama_server_path, DEFAULT_SERVER_PATH)
-        mmproj = _resolve_path(mmproj_path) if mmproj_path else ""
+        mmproj = _require_absolute_path(mmproj_path, "mmproj_path") if mmproj_path else ""
 
         # Collect reference images
         images = []
@@ -461,6 +515,8 @@ class PromptEnhancerBatch(ComfyNode):
                 user_prompt=prompt,
                 ctx_size=ctx_size,
                 seed=seed,
+                max_retries=max_retries,
+                min_words=min_words,
                 images=images,
                 mmproj_path=mmproj,
                 extra_flags=extra_server_args,

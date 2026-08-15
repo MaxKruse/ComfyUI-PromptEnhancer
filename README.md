@@ -22,6 +22,8 @@ Drop this into your `custom_nodes/` directory. No API keys needed - runs entirel
 - **VRAM-aware**: Automatically unloads ComfyUI models before spawning llama-server, then frees memory after
 - **Retry loop**: Keeps trying until a quality, unique prompt is generated
 - **Quality validation**: Rejects refusals, short outputs, and prompts too similar to the original
+- **Interruptible**: Cancel at any point (while the server starts up or while generating) via ComfyUI's interrupt - the spawned server is killed cleanly
+- **Startup diagnostics**: If `llama-server` fails to start, the node logs its output and exit code and falls back to your original prompt instead of hanging
 - **Batch mode**: Enhance multiple prompts sequentially
 
 ## Recommended Models
@@ -207,9 +209,12 @@ The node automatically:
 
 This means the LLM and ComfyUI models don't compete for VRAM.
 
+Every step is interruptible - press ComfyUI's interrupt and the node stops, killing the `llama-server` it spawned. If the server crashes on startup, the last lines of its output and its exit code are logged, and your original prompt is returned unchanged.
+
 ## Troubleshooting
 
-- **Server fails to start**: Check that `llama-server` is in your PATH or provide the full path
+- **Server fails to start**: Check that `llama-server` is in your PATH or provide the full path. If it crashes on startup (bad model path, OOM, bad flags), the node now logs the server's last output lines and exit code, then returns your original prompt - scroll up in the console for the `llama-server output (last lines)` block.
+- **Cancel a stuck enhancement**: Use ComfyUI's interrupt button. The node stops waiting/generating and kills the `llama-server` it spawned.
 - **Model not found**: Verify the `.gguf` file path is correct (absolute or relative to ComfyUI root)
 - **Out of memory**: Reduce model size (Q4 -> Q3) or add `--ctx-size 4096` to extra_flags
 - **Refusal outputs**: Try a less-aligned model

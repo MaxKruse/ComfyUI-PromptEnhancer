@@ -31,8 +31,11 @@ Drop this into your `custom_nodes/` directory. No API keys needed - runs entirel
 Large reasoning-capable models give the best results:
 
 - **Gemma 4 31B** (QAT Q4_0, ~17 GB) - excellent prompt following and detail
+- **Gemma 4 26B A4B** (QAT Q4_0, ~15 GB) - MoE with only ~4B active params, so it generates much faster on CPU/hybrid setups while keeping near-31B quality
 - **Qwen 3.6 35B** (Q4_K_M, ~20 GB) - strong creative expansion and instruction following
 - **Gemma 4 12B** (QAT Q4_0, ~6.6 GB) - good balance of quality and VRAM usage
+
+The Gemma 4 models are the best fit for this node: both are good at reasoning, and reasoning is on by default - no extra flags needed. Thinking tokens count against the context window, so keep the Recommended ctx values from the presets table.
 
 Any GGUF model works. Smaller models (7B class) are fine for basic prompts but may lack the detail larger models produce.
 

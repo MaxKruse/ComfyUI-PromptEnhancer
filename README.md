@@ -78,12 +78,14 @@ Supports the same dynamic reference images as the single prompt variant.
 
 ## Presets
 
-| Display Name | Target | Description |
-|--------------|--------|-------------|
-| `KREA 2 T2I` | KREA 2 Text-to-Image | Prompt expansion for both SFW and NSFW content. Based on the [Krea 2 technical report](https://www.krea.ai/blog/krea-2-technical-report), the [official Krea-2 expander guidelines](https://github.com/krea-ai/krea-2/blob/main/docs/expansion.txt), [community research](https://civitai.com/models/2749367), and the [SNOFS v1.3D](https://civitai.red/models/1972981/snofs-sex-nudes-other-fun-stuff?modelVersionId=3220691) LoRA directives |
-| `LTX 2.3 10Eros I2V` | LTX 2.3 Image-to-Video | Motion prompt engineering for both SFW and NSFW content. Based on [official LTX 2.3 guide](https://ltx.io/blog/ltx-2-3-prompt-guide) and [community research](https://huggingface.co/TenStrip/LTX2.3-10Eros_Workflows) |
-| `MiniMax H3 - base` | MiniMax H3 Text/Image-to-Video | Three-section prompts (`integrated_multimodal_description`, `overall_soundscape`, `non_diegetic_music`) with shot-by-shot camera, audio, and dialogue. Auto-detects T2VA (no images) vs I2VA (reference image(s) as first frame). Based on the [official MiniMax H3 Video Prompt Writing Guide](https://huggingface.co/MiniMaxAI/MiniMax-H3/resolve/main/docs/VIDEO_PROMPT_WRITING_GUIDE_base_en.md). Handles both SFW and NSFW content. |
-| `MiniMax H3 - r2v` | MiniMax H3 Reference-to-Video | Structured full-reference rewrite outputs for R2V. Based on the [official MiniMax H3 Full-Reference Mode guide](https://platform.minimaxi.com/document/minimax-h3-full-reference-mode-guide). Handles both SFW and NSFW content. |
+| Display Name | Target | Description | Suggested maxTokens |
+|--------------|--------|-------------|---------------------|
+| `KREA 2 T2I` | KREA 2 Text-to-Image | Prompt expansion for both SFW and NSFW content. Based on the [Krea 2 technical report](https://www.krea.ai/blog/krea-2-technical-report), the [official Krea-2 expander guidelines](https://github.com/krea-ai/krea-2/blob/main/docs/expansion.txt), [community research](https://civitai.com/models/2749367), and the [SNOFS v1.3D](https://civitai.red/models/1972981/snofs-sex-nudes-other-fun-stuff?modelVersionId=3220691) LoRA directives | 512 |
+| `LTX 2.3 10Eros I2V` | LTX 2.3 Image-to-Video | Motion prompt engineering for both SFW and NSFW content. Based on [official LTX 2.3 guide](https://ltx.io/blog/ltx-2-3-prompt-guide) and [community research](https://huggingface.co/TenStrip/LTX2.3-10Eros_Workflows) | 512 |
+| `MiniMax H3 - base` | MiniMax H3 Text/Image-to-Video | Three-section prompts (`integrated_multimodal_description`, `overall_soundscape`, `non_diegetic_music`) with shot-by-shot camera, audio, and dialogue. Auto-detects T2VA (no images) vs I2VA (reference image(s) as first frame). Based on the [official MiniMax H3 Video Prompt Writing Guide](https://huggingface.co/MiniMaxAI/MiniMax-H3/resolve/main/docs/VIDEO_PROMPT_WRITING_GUIDE_base_en.md). Handles both SFW and NSFW content. | 4096 |
+| `MiniMax H3 - r2v` | MiniMax H3 Reference-to-Video | Structured full-reference rewrite outputs for R2V. Based on the [official MiniMax H3 Full-Reference Mode guide](https://platform.minimaxi.com/document/minimax-h3-full-reference-mode-guide). Handles both SFW and NSFW content. | 1024 |
+
+`maxTokens` caps the length of the LLM's expanded prompt. The suggested values leave headroom over each preset's target output length so expansions finish before hitting the cap: KREA 2 targets 200-300 words (about 400 tokens), LTX 2.3 10Eros targets 60-200 words (about 280 tokens), MiniMax H3 r2v targets 350-500 words (about 650 tokens), and MiniMax H3 base is uncapped and can run long on multi-shot, dialogue-dense content.
 
 Each preset contains both general and NSFW-specific directives. The LLM detects the content type from your prompt and applies the appropriate rules automatically - no need to switch presets.
 

@@ -28,6 +28,29 @@ def test_krea2_t2i_preset_has_nsfw_directives():
     assert "anatomical" in content.lower()
 
 
+def test_krea2_t2i_preset_has_snofs_directives():
+    """KREA-2 preset should contain SNOFS v1.3D LoRA directives."""
+    content = load_preset("krea2-t2i")
+    assert content is not None
+    assert "SNOFS" in content
+    # Trained vocabulary from the LoRA author's term list
+    for term in ("blowjob", "cunnilingus", "doggystyle position", "penis", "vagina", "cum"):
+        assert term in content
+    # Natural-language (full sentence) prompting rule
+    assert "full sentence" in content.lower()
+
+
+def test_krea2_t2i_preset_photo_wording_rule():
+    """KREA-2 preset must require literal photo wording and forbid 'photorealistic'."""
+    content = load_preset("krea2-t2i")
+    assert content is not None
+    assert "photograph" in content
+    # 'photorealistic' may only appear as a forbidden token
+    lowered = content.lower()
+    assert "photorealistic" in lowered
+    assert '"photorealistic"' in lowered
+
+
 def test_ltx2_3_i2v_preset_exists():
     """LTX 2.3 10Eros image-to-video preset should exist."""
     content = load_preset("ltx2.3-10eros-i2v")

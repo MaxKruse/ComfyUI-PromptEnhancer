@@ -38,10 +38,17 @@ except ImportError:
 # Default server path - works if llama-server is in PATH
 DEFAULT_SERVER_PATH = "llama-server"
 
-# Default model: Gemma 4 31B NVFP4 Turbo (~18 GB)
-DEFAULT_MODEL_PATH = (
-    "C:/Users/maxkr/.lmstudio/models/lmstudio-community/"
-    "gemma-4-31B-it-QAT-GGUF/gemma-4-31B-it-NVFP4-turbo-NVFP4.gguf"
+# Default model: Muse-Glimmer 30B uncensored (abliterated), Q4_K_M imatrix GGUF (~16 GB)
+# Base model: https://huggingface.co/TrevorJS/Muse-Glimmer-30B-uncensored
+# GGUF:      https://huggingface.co/mradermacher/Muse-Glimmer-30B-uncensored-i1-GGUF
+DEFAULT_MODEL_PATH = "C:/Users/maxkr/LLMs/Muse-Glimmer/Muse-Glimmer-30B-uncensored.i1-Q4_K_M.gguf"
+
+# Default extra server args: Muse-Glimmer DFlash draft (speculative decoding) tuned for
+# the Krea2_ZFilm workflow: 15 draft tokens per step, top-p 0.95, top-k 64.
+# Draft model: the standard (non-abliterated) Muse-Glimmer DFlash draft, k-quant GGUF.
+DEFAULT_EXTRA_SERVER_ARGS = (
+    '--model-draft "C:\\Users\\maxkr\\LLMs\\Muse-Glimmer\\dflash-kquant.gguf" '
+    "--spec-type draft-dflash --spec-draft-n-max 15 --top-p 0.95 --top-k 64"
 )
 
 def _get_comfy_base_path() -> str:
@@ -144,7 +151,9 @@ class PromptEnhancer(ComfyNode):
     Supports KREA-2 T2I, LTX 2.3 10Eros I2V, and MiniMax H3 R2V via presets.
     Each preset handles both SFW and NSFW content automatically.
     The target model is determined by the selected preset.
-    Sampling parameters are left to the llama-server defaults.
+    Defaults: Muse-Glimmer 30B uncensored with the DFlash draft model for
+    speculative decoding, plus sampling flags (top-p 0.95, top-k 64) - tuned
+    in the Krea2_ZFilm workflow.
 
     This node:
     1. Unloads all ComfyUI models to free VRAM
@@ -202,7 +211,7 @@ class PromptEnhancer(ComfyNode):
                     default=DEFAULT_MODEL_PATH,
                     placeholder=(
                         "Full path to your .gguf model file\n"
-                        "Example: C:/models/qwen2.5-7b-instruct-q4_k_m.gguf"
+                        "Example: C:/Users/maxkr/LLMs/Muse-Glimmer/Muse-Glimmer-30B-uncensored.i1-Q4_K_M.gguf"
                     ),
                     tooltip="Path to the GGUF model file for llama-server",
                 ),
@@ -214,11 +223,11 @@ class PromptEnhancer(ComfyNode):
                 ),
                 io.Int.Input(
                     "ctx_size",
-                    default=16000,
+                    default=10240,
                     min=2048,
                     max=131072,
                     step=1024,
-                    tooltip="Prompt context window size in tokens. 16000 gives the LLM enough headroom for system prompt, user prompt, and generation.",
+                    tooltip="Prompt context window size in tokens. 10240 covers system prompt, user prompt, thinking, and generation for text-only presets.",
                 ),
                 io.Int.Input(
                     "seed",
@@ -239,7 +248,7 @@ class PromptEnhancer(ComfyNode):
                 ),
                 io.Int.Input(
                     "min_words",
-                    default=25,
+                    default=50,
                     min=10,
                     max=500,
                     step=1,
@@ -256,8 +265,8 @@ class PromptEnhancer(ComfyNode):
                 io.String.Input(
                     "extra_server_args",
                     optional=True,
-                    default="",
-                    placeholder='e.g. --n-gpu-layers 99 --threads 8 --flash-attn',
+                    default=DEFAULT_EXTRA_SERVER_ARGS,
+                    placeholder='e.g. --n-gpu-layers 99 --threads 8 --flash-attn (default: Muse-Glimmer DFlash draft + sampling flags)',
                     tooltip="Extra command-line flags passed directly to llama-server. Space-separated.",
                 ),
                 io.Autogrow.Input(
@@ -303,7 +312,7 @@ class PromptEnhancer(ComfyNode):
         min_words: int,
         ref_images: dict[str, any] | None = None,
         mmproj_path: str = "",
-        extra_server_args: str = "",
+        extra_server_args: str = DEFAULT_EXTRA_SERVER_ARGS,
         **kwargs,
     ) -> io.NodeOutput:
         if not prompt or not prompt.strip():

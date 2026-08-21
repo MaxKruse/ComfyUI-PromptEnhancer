@@ -118,7 +118,7 @@ def build_command(
     model_path: str,
     port: int,
     *,
-    ctx_size: int = 16000,
+    ctx_size: int = 10240,
     seed: int = 0,
     mmproj_path: str = "",
     extra_flags: str = "",
@@ -467,12 +467,12 @@ def enhance_prompt(
     system_prompt: str,
     user_prompt: str,
     *,
-    ctx_size: int = 16000,
+    ctx_size: int = 10240,
     seed: int = 0,
     mmproj_path: str = "",
     extra_flags: str = "",
     max_retries: int = 5,
-    min_words: int = 25,
+    min_words: int = 50,
     images = None,
 ) -> str | None:
     """Enhance a prompt by spawning a temporary llama-server instance.

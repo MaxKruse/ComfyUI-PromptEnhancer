@@ -164,3 +164,19 @@ def test_start_llama_server_logs_early_crash(monkeypatch, caplog):
     assert elapsed < 2.5, f"early crash should be detected fast (well under the {llm_client._SERVER_STARTUP_TIMEOUT}s timeout), took {elapsed:.2f}s"
     assert "fake-crash-boom" in caplog.text, f"server output not captured:\n{caplog.text}"
     assert "exited early" in caplog.text, f"should report early exit:\n{caplog.text}"
+
+
+def test_build_command_parses_default_extra_flags():
+    """The node's default extra flags (Muse-Glimmer DFlash draft, quoted Windows path)
+    must survive shlex.split with the draft path intact."""
+    import llm_client
+    from nodes import DEFAULT_EXTRA_SERVER_ARGS
+
+    cmd = llm_client.build_command("llama-server", "model.gguf", 1234, extra_flags=DEFAULT_EXTRA_SERVER_ARGS)
+
+    assert cmd[0] == "llama-server"
+    assert "--model-draft" in cmd
+    draft = cmd[cmd.index("--model-draft") + 1]
+    assert draft == "C:\\Users\\maxkr\\LLMs\\Muse-Glimmer\\dflash-kquant.gguf"
+    assert cmd[cmd.index("--spec-type") + 1] == "draft-dflash"
+    assert "--top-p" in cmd and "--top-k" in cmd

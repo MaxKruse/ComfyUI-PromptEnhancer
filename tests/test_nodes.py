@@ -209,8 +209,8 @@ def test_prompt_enhancer_has_optional_mmproj():
     )
 
 
-def test_prompt_enhancer_ctx_size_defaults_to_16000():
-    """ctx_size should default to 16000."""
+def test_prompt_enhancer_ctx_size_defaults_to_10240():
+    """ctx_size should default to 10240 (Muse-Glimmer Krea2_ZFilm workflow tuning)."""
     from nodes import PromptEnhancer
 
     input_types = _get_input_types(PromptEnhancer)
@@ -219,4 +219,45 @@ def test_prompt_enhancer_ctx_size_defaults_to_16000():
 
     # V3 io.Int.Input: type is "INT", config is second element
     assert ctx_def[0] == "INT"
-    assert ctx_def[1].get("default") == 16000
+    assert ctx_def[1].get("default") == 10240
+
+
+def test_prompt_enhancer_model_defaults_to_muse_glimmer_uncensored():
+    """llm_model_path should default to the Muse-Glimmer 30B uncensored GGUF."""
+    from nodes import PromptEnhancer
+
+    input_types = _get_input_types(PromptEnhancer)
+    required = input_types.get("required", {})
+    model_def = required["llm_model_path"]
+
+    default = model_def[1].get("default", "")
+    assert default.endswith(".gguf")
+    assert "Muse-Glimmer-30B-uncensored" in default
+
+
+def test_prompt_enhancer_min_words_defaults_to_50():
+    """min_words should default to 50 (KREA 2 T2I quality bar from the working workflow)."""
+    from nodes import PromptEnhancer
+
+    input_types = _get_input_types(PromptEnhancer)
+    required = input_types.get("required", {})
+    mw_def = required["min_words"]
+
+    assert mw_def[0] == "INT"
+    assert mw_def[1].get("default") == 50
+
+
+def test_prompt_enhancer_extra_args_default_uses_dflash_draft():
+    """extra_server_args default must enable Muse-Glimmer DFlash speculative decoding
+    with the working workflow's sampling flags (top-p 0.95, top-k 64)."""
+    from nodes import PromptEnhancer
+
+    input_types = _get_input_types(PromptEnhancer)
+    optional = input_types.get("optional", {})
+    default = optional["extra_server_args"][1].get("default", "")
+
+    assert "--model-draft" in default
+    assert "--spec-type draft-dflash" in default
+    assert "--spec-draft-n-max 15" in default
+    assert "--top-p 0.95" in default
+    assert "--top-k 64" in default

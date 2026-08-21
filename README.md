@@ -28,14 +28,15 @@ Drop this into your `custom_nodes/` directory. No API keys needed - runs entirel
 
 ## Recommended Models
 
-Large reasoning-capable models give the best results:
+Large reasoning-capable models give the best results. The node defaults are tuned for the first one:
 
+- **Muse-Glimmer 30B uncensored** (Q4_K_M imatrix, ~16 GB) - recommended default. Abliterated fine-tune of Meta's Muse-Glimmer 30B ([base model](https://huggingface.co/TrevorJS/Muse-Glimmer-30B-uncensored), [GGUF](https://huggingface.co/mradermacher/Muse-Glimmer-30B-uncensored-i1-GGUF)). Pair it with the Muse-Glimmer DFlash draft model (`--spec-type draft-dflash`) for speculative decoding - that is the node's built-in default for `extra_flags`.
 - **Gemma 4 31B** (QAT Q4_0, ~17 GB) - excellent prompt following and detail
 - **Gemma 4 26B A4B** (QAT Q4_0, ~15 GB) - MoE with only ~4B active params, so it generates much faster on CPU/hybrid setups while keeping near-31B quality
 - **Qwen 3.6 35B** (Q4_K_M, ~20 GB) - strong creative expansion and instruction following
 - **Gemma 4 12B** (QAT Q4_0, ~6.6 GB) - good balance of quality and VRAM usage
 
-The Gemma 4 models are the best fit for this node: both are good at reasoning, and reasoning is on by default - no extra flags needed. Thinking tokens count against the context window, so keep the Recommended ctx values from the presets table.
+The reasoning models (Muse-Glimmer, Gemma 4) have reasoning on by default - no extra flags needed. Thinking tokens count against the context window, so keep the Recommended ctx values from the presets table.
 
 Any GGUF model works. Smaller models (7B class) are fine for basic prompts but may lack the detail larger models produce.
 
@@ -64,9 +65,12 @@ Single prompt enhancement with retry loop.
 | `preset` | Dropdown | System prompt preset (determines target model and expansion style) |
 | `llm_model_path` | String | Path to your `.gguf` model |
 | `llama_server_path` | String | Path to `llama-server` binary (default: `llama-server`) |
-| `ctx_size` | Int | Context window size in tokens (default: 16000, range: 2048-131072) |
+| `ctx_size` | Int | Context window size in tokens (default: 10240, range: 2048-131072) |
 | `seed` | Int | Random seed for generation (default: 0, auto-randomizes after each run) |
+| `max_retries` | Int | Max generation attempts until a quality prompt is accepted (default: 5) |
+| `min_words` | Int | Minimum word count for an accepted prompt (default: 50) |
 | `mmproj_path` | String | Optional - path to multimodal projector `.gguf` for vision input |
+| `extra_flags` | String | Optional extra `llama-server` flags (default: Muse-Glimmer DFlash draft + `--top-p 0.95 --top-k 64`, see below) |
 | `ref_image_0` .. `ref_image_8` | Image | Optional dynamic reference images (0-9 slots via Autogrow) |
 
 **Output:** `enhanced_prompt` - the LLM-enhanced prompt
@@ -88,7 +92,7 @@ Supports the same dynamic reference images as the single prompt variant.
 | `MiniMax H3 - base` | MiniMax H3 Text/Image-to-Video | Three-section prompts (`integrated_multimodal_description`, `overall_soundscape`, `non_diegetic_music`) with shot-by-shot camera, audio, and dialogue. Auto-detects T2VA (no images) vs I2VA (reference image(s) as first frame). Based on the [official MiniMax H3 Video Prompt Writing Guide](https://huggingface.co/MiniMaxAI/MiniMax-H3/resolve/main/docs/VIDEO_PROMPT_WRITING_GUIDE_base_en.md). Handles both SFW and NSFW content. | 16000 |
 | `MiniMax H3 - r2v` | MiniMax H3 Reference-to-Video | Structured full-reference rewrite outputs for R2V. Based on the [official MiniMax H3 Full-Reference Mode guide](https://platform.minimaxi.com/document/minimax-h3-full-reference-mode-guide). Handles both SFW and NSFW content. | 16000 |
 
-Recommended context size for `llama-server -c` (the node defaults to 16000). Each request fits in: system prompt + user prompt + reference images (via mmproj, roughly 0.5-2k tokens per image) + the expanded output. Budgets: KREA 2 T2I is text-only (about 1.2k system + about 0.5k output = under 2k, so 4096 leaves 2x headroom); LTX 2.3 I2V adds 1-2 reference images (about 4-7k total); MiniMax H3 base can output uncapped, dialogue-dense descriptions (about 8k with a first-frame image); MiniMax H3 r2v takes several reference images plus a 350-500 word output (about 7-9k). Lowering `-c` for text-only work saves KV-cache RAM; if you run a reasoning model with thinking enabled, keep 16000 so the thinking budget does not starve the output.
+Recommended context size for `llama-server -c` (the node defaults to 10240). Each request fits in: system prompt + user prompt + reference images (via mmproj, roughly 0.5-2k tokens per image) + the expanded output. Budgets: KREA 2 T2I is text-only (about 1.2k system + about 0.5k output = under 2k, so 4096 leaves 2x headroom); LTX 2.3 I2V adds 1-2 reference images (about 4-7k total); MiniMax H3 base can output uncapped, dialogue-dense descriptions (about 8k with a first-frame image); MiniMax H3 r2v takes several reference images plus a 350-500 word output (about 7-9k). Lowering `-c` for text-only work saves KV-cache RAM; if you run a reasoning model with thinking enabled, keep the preset's recommended value (16000 for MiniMax H3) so the thinking budget does not starve the output.
 
 Each preset contains both general and NSFW-specific directives. The LLM detects the content type from your prompt and applies the appropriate rules automatically - no need to switch presets.
 
@@ -137,15 +141,26 @@ Requires:
 
 ## Extra Flags Reference
 
-The `extra_flags` input passes arguments directly to `llama-server`. Here are the flags used in the example workflows:
+The `extra_flags` input passes arguments directly to `llama-server`. Its built-in default covers the recommended Muse-Glimmer setup (DFlash draft speculative decoding + sampling flags, below). Here are the other flags used in the example workflows:
 
 | Flag | Description |
 |------|-------------|
 | `--no-mmap` | Disable memory-mapping the model file. Only use when the model fits in VRAM easily - avoids disk I/O during generation. |
 | `--threads N` | CPU threads for generation. Set to ~75% of physical (performance) cores - not hyperthreaded/logical threads. |
-| `-c N` / `--ctx-size N` | Prompt context window size in tokens. `16000` gives the LLM enough headroom for the system prompt, user prompt, and generation without truncation. |
+| `-c N` / `--ctx-size N` | Prompt context window size in tokens. The node default is `10240` (the `ctx_size` input already sets this; only needed here to override). |
 | `--mmproj PATH` | Path to the multimodal projector GGUF file. Required for LTX I2V (reference image input). Optional for KREA 2 T2I - use as a visual hint for the LLM. Must match the base model (e.g. `mmproj-gemma-4-31B-it-*.gguf` for Gemma 4 31B). |
-| `--model-draft PATH` + `--spec-type draft-mtp` | Speculative decoding for generation speedup. A draft model pre-generates candidate tokens that the main model accepts or rejects in parallel. Only adds value if your hardware has headroom to run both models. `draft-mtp` uses Multi-Token Prediction (requires an MTP-trained draft model like Unsloth's `gemma-4-31B-it-MTP-BF16.gguf`). |
+| `--model-draft PATH` + `--spec-type ...` | Speculative decoding for generation speedup. A draft model pre-generates candidate tokens that the main model accepts or rejects in parallel. Only adds value if your hardware has headroom to run both models. `draft-mtp` uses Multi-Token Prediction (requires an MTP-trained draft model like Unsloth's `gemma-4-31B-it-MTP-BF16.gguf`). `draft-dflash` uses a DFlash draft model (for Muse-Glimmer 30B: the standard, non-abliterated Muse-Glimmer DFlash draft, e.g. `dflash-kquant.gguf`). |
+| `--spec-draft-n-max N` | Max draft tokens per speculative step with `--spec-type draft-dflash`. `15` works well for Muse-Glimmer. |
+| `--temperature N` / `--top-p N` / `--top-k N` | Sampling parameters. The node's request payload deliberately omits them, so these server flags set the sampling. The Muse-Glimmer default uses `--top-p 0.95 --top-k 64` with the llama-server default temperature. |
+
+### Muse Glimmer 30B (recommended default)
+
+```text
+--model-draft "C:\Users\maxkr\LLMs\Muse-Glimmer\dflash-kquant.gguf" \
+  --spec-type draft-dflash --spec-draft-n-max 15 --top-p 0.95 --top-k 64
+```
+
+This is the node's built-in default for `extra_flags` - the configuration from the working Krea2_ZFilm workflow (Muse-Glimmer 30B uncensored + DFlash draft). Muse-Glimmer is multimodal: to send reference images, add `--mmproj "C:\Users\maxkr\LLMs\Muse-Glimmer\mmproj-Muse-Glimmer-30B-BF16.gguf"` to the same input.
 
 ### KREA 2 T2I (text-only)
 

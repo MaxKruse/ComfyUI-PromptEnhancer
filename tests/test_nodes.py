@@ -66,7 +66,7 @@ def test_prompt_enhancer_display_name_is_generic():
 
     enhancer_key = None
     for key, display in NODE_DISPLAY_NAME_MAPPINGS.items():
-        if "Enhancer" in display and "Batch" not in display:
+        if "Enhancer" in display:
             enhancer_key = key
             break
 
@@ -81,7 +81,6 @@ def test_node_class_mappings_use_generic_names():
 
     # Old LTX-specific names should not be present
     assert "LTXPromptEnhancer" not in NODE_CLASS_MAPPINGS
-    assert "LTXPromptEnhancerBatch" not in NODE_CLASS_MAPPINGS
 
     # Generic names should be present
     assert "PromptEnhancer" in NODE_CLASS_MAPPINGS

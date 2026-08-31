@@ -223,11 +223,11 @@ class PromptEnhancer(ComfyNode):
                 ),
                 io.Int.Input(
                     "ctx_size",
-                    default=10240,
+                    default=20000,
                     min=2048,
                     max=131072,
                     step=1024,
-                    tooltip="Prompt context window size in tokens. 10240 covers system prompt, user prompt, thinking, and generation for text-only presets.",
+                    tooltip="Prompt context window size in tokens. 20000 covers the largest presets (MiniMax H3 with LoRA routing guide), user prompt, thinking, and generation, with headroom for multiple reference images.",
                 ),
                 io.Int.Input(
                     "seed",

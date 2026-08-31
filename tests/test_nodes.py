@@ -208,8 +208,8 @@ def test_prompt_enhancer_has_optional_mmproj():
     )
 
 
-def test_prompt_enhancer_ctx_size_defaults_to_10240():
-    """ctx_size should default to 10240 (Muse-Glimmer Krea2_ZFilm workflow tuning)."""
+def test_prompt_enhancer_ctx_size_defaults_to_20000():
+    """ctx_size should default to 20000 (MiniMax H3 presets with LoRA routing guide plus reference images)."""
     from nodes import PromptEnhancer
 
     input_types = _get_input_types(PromptEnhancer)
@@ -218,7 +218,7 @@ def test_prompt_enhancer_ctx_size_defaults_to_10240():
 
     # V3 io.Int.Input: type is "INT", config is second element
     assert ctx_def[0] == "INT"
-    assert ctx_def[1].get("default") == 10240
+    assert ctx_def[1].get("default") == 20000
 
 
 def test_prompt_enhancer_model_defaults_to_muse_glimmer_uncensored():

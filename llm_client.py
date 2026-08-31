@@ -119,7 +119,6 @@ def build_command(
     port: int,
     *,
     ctx_size: int = 10240,
-    seed: int = 0,
     mmproj_path: str = "",
     extra_flags: str = "",
 ) -> list[str]:
@@ -137,14 +136,6 @@ def build_command(
         "--no-warmup",
         "-c", str(ctx_size),
     ]
-
-    if seed < 0:
-        # Use a random seed
-        cmd.extend(["--seed", str(random.randint(1, 2**32 - 1))])
-    else:
-        # llama-server --seed only accepts a 32-bit unsigned int.
-        # ComfyUI seeds can be up to 2**63, so clamp to fit.
-        cmd.extend(["--seed", str(seed % (2**32))])
 
     if mmproj_path:
         cmd.extend(["--mmproj", mmproj_path])
@@ -207,6 +198,7 @@ def chat_completion(
     model_name: str,
     system_prompt: str,
     user_prompt: str,
+    seed: int,
     *,
     images = None,
 ) -> str | None:
@@ -216,8 +208,9 @@ def chat_completion(
     each is encoded as a base64 JPEG and sent alongside the text prompt so the LLM
     can see all reference images.
 
-    Sampling parameters (temperature, top_p, etc.) are not sent in the payload;
-    the server uses its own defaults or command-line settings.
+    *seed* is sent in the payload (OpenAI-compatible field) so llama-server
+    re-seeds sampling per request. Other sampling parameters (temperature,
+    top_p, etc.) are not sent; the server uses its own defaults or flags.
     """
     # Build user message content
     if images:
@@ -235,6 +228,7 @@ def chat_completion(
 
     payload = {
         "model": model_name,
+        "seed": seed,
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_content},
@@ -373,14 +367,14 @@ def _log_server_error(err_tail):
     _print_safe(f"  [PromptEnhancer] llama-server output (last lines):\n{snippet}")
 
 
-def _start_llama_server(server_path: str, model_path: str, port: int, ctx_size: int, seed: int, mmproj_path: str, extra_flags: str) -> tuple[subprocess.Popen | None, str, float]:
+def _start_llama_server(server_path: str, model_path: str, port: int, ctx_size: int, mmproj_path: str, extra_flags: str) -> tuple[subprocess.Popen | None, str, float]:
     """Start llama-server and wait until healthy. Returns proc, base_url, start_time.
 
     Captures server output so early startup failures (bad model, OOM, bad flags) are
     logged with diagnostics. Raises InterruptProcessingException if ComfyUI requests
     an interrupt while waiting.
     """
-    cmd = build_command(server_path, model_path, port, ctx_size=ctx_size, seed=seed, mmproj_path=mmproj_path, extra_flags=extra_flags)
+    cmd = build_command(server_path, model_path, port, ctx_size=ctx_size, mmproj_path=mmproj_path, extra_flags=extra_flags)
     _print_safe(f"  [PromptEnhancer] Running llama-server (model: {Path(model_path).name}, port: {port})...")
     creationflags = 0
     if sys.platform == "win32":
@@ -420,13 +414,13 @@ def _start_llama_server(server_path: str, model_path: str, port: int, ctx_size: 
     return proc, base_url, start
 
 
-def _run_chat_completion_interruptible(base_url, model_name, system_prompt, user_prompt, images):
+def _run_chat_completion_interruptible(base_url, model_name, system_prompt, user_prompt, images, seed):
     """Run a single chat completion in a worker thread so it can be interrupted mid-request."""
     box = {}
 
     def worker():
         try:
-            box["value"] = chat_completion(base_url=base_url, model_name=model_name, system_prompt=system_prompt, user_prompt=user_prompt, images=images)
+            box["value"] = chat_completion(base_url=base_url, model_name=model_name, system_prompt=system_prompt, user_prompt=user_prompt, seed=seed, images=images)
         except Exception:
             box["value"] = None
 
@@ -439,16 +433,21 @@ def _run_chat_completion_interruptible(base_url, model_name, system_prompt, user
     return box.get("value")
 
 
-def _run_retry_loop(base_url: str, model_name: str, system_prompt: str, user_prompt: str, images, max_retries: int, min_words: int) -> str | None:
+def _run_retry_loop(base_url: str, model_name: str, system_prompt: str, user_prompt: str, images, max_retries: int, min_words: int, seed: int) -> str | None:
     """Run chat completions with retry until quality passes.
+
+    Each attempt sends its own seed (base seed + attempt index) in the request
+    payload, so retries genuinely vary instead of repeating the same output.
 
     Raises InterruptProcessingException if ComfyUI requests an interrupt.
     """
+    base_seed = (seed if seed >= 0 else random.getrandbits(32)) % 2**32
     best_result: str | None = None
     for attempt in range(1, max_retries + 1):
         _check_interrupt()
-        _print_safe(f"  [PromptEnhancer] Attempt {attempt}/{max_retries}...")
-        result = _run_chat_completion_interruptible(base_url, model_name, system_prompt, user_prompt, images)
+        attempt_seed = (base_seed + attempt - 1) % 2**32
+        _print_safe(f"  [PromptEnhancer] Attempt {attempt}/{max_retries} (seed {attempt_seed})...")
+        result = _run_chat_completion_interruptible(base_url, model_name, system_prompt, user_prompt, images, seed=attempt_seed)
         if result and is_good_prompt(result, user_prompt, min_words=min_words):
             _print_safe(f"  [PromptEnhancer] ✓ Accepted on attempt {attempt} ({len(result)} chars)")
             return result
@@ -477,6 +476,10 @@ def enhance_prompt(
 ) -> str | None:
     """Enhance a prompt by spawning a temporary llama-server instance.
 
+    *seed* is the base sampling seed, sent per request: attempt N sends
+    (base seed + N - 1) mod 2**32. A negative seed resolves to a random
+    32-bit base.
+
     Interruptible at any point: checks ComfyUI's interrupt state while the server
     starts up and while generating. Raises InterruptProcessingException on interrupt.
     """
@@ -498,7 +501,7 @@ def enhance_prompt(
 
     port = find_free_port()
     server_proc, base_url, start = _start_llama_server(
-        server_path, model_path, port, ctx_size, seed, mmproj_path, extra_flags
+        server_path, model_path, port, ctx_size, mmproj_path, extra_flags
     )
     if server_proc is None:
         return None
@@ -511,7 +514,7 @@ def enhance_prompt(
     effective_system_prompt = UNCENSORED_PREFIX + system_prompt
 
     try:
-        best_result = _run_retry_loop(base_url, model_name, effective_system_prompt, user_prompt, images, max_retries, min_words)
+        best_result = _run_retry_loop(base_url, model_name, effective_system_prompt, user_prompt, images, max_retries, min_words, seed)
     finally:
         kill_server(server_proc)
 

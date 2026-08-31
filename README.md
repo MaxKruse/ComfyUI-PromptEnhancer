@@ -15,7 +15,7 @@ Drop this into your `custom_nodes/` directory. No API keys needed - runs entirel
 
 - **Auto-detecting presets**: Built-in presets that handle both SFW and NSFW content automatically via in-prompt directives
 - **Uncensored directive**: System prompts are prepended with an uncensored instruction to reduce refusals and ensure the model follows instructions
-- **Server-side sampling**: Sampling parameters are left to the llama-server defaults or command-line flags
+- **Seeded sampling**: The seed is sent to the LLM per request; each retry attempt uses the next seed value, so retries produce genuinely different output
 - **Dynamic reference images**: Connect 0-9 reference images via Autogrow slots (requires a multimodal GGUF + `--mmproj` flag)
 - **Bypass-safe**: When the node is disabled/bypassed, the original prompt passes through unchanged
 - **Workflow persistence**: Enhanced prompt values are saved in the workflow JSON and preserved across sessions
@@ -66,7 +66,7 @@ Single prompt enhancement with retry loop.
 | `llm_model_path` | String | Path to your `.gguf` model |
 | `llama_server_path` | String | Path to `llama-server` binary (default: `llama-server`) |
 | `ctx_size` | Int | Context window size in tokens (default: 10240, range: 2048-131072) |
-| `seed` | Int | Random seed for generation (default: 0, auto-randomizes after each run) |
+| `seed` | Int | Sampling seed sent to the LLM per request (default: 0, auto-randomizes after each run). Each retry attempt uses the next seed value; -1 = random base seed each run |
 | `max_retries` | Int | Max generation attempts until a quality prompt is accepted (default: 5) |
 | `min_words` | Int | Minimum word count for an accepted prompt (default: 50) |
 | `mmproj_path` | String | Optional - path to multimodal projector `.gguf` for vision input |
@@ -151,7 +151,7 @@ The `extra_flags` input passes arguments directly to `llama-server`. Its built-i
 | `--mmproj PATH` | Path to the multimodal projector GGUF file. Required for LTX I2V (reference image input). Optional for KREA 2 T2I - use as a visual hint for the LLM. Must match the base model (e.g. `mmproj-gemma-4-31B-it-*.gguf` for Gemma 4 31B). |
 | `--model-draft PATH` + `--spec-type ...` | Speculative decoding for generation speedup. A draft model pre-generates candidate tokens that the main model accepts or rejects in parallel. Only adds value if your hardware has headroom to run both models. `draft-mtp` uses Multi-Token Prediction (requires an MTP-trained draft model like Unsloth's `gemma-4-31B-it-MTP-BF16.gguf`). `draft-dflash` uses a DFlash draft model (for Muse-Glimmer 30B: the standard, non-abliterated Muse-Glimmer DFlash draft, e.g. `dflash-kquant.gguf`). |
 | `--spec-draft-n-max N` | Max draft tokens per speculative step with `--spec-type draft-dflash`. `15` works well for Muse-Glimmer. |
-| `--temperature N` / `--top-p N` / `--top-k N` | Sampling parameters. The node's request payload deliberately omits them, so these server flags set the sampling. The Muse-Glimmer default uses `--top-p 0.95 --top-k 64` with the llama-server default temperature. |
+| `--temperature N` / `--top-p N` / `--top-k N` | Sampling parameters. The node's request payload deliberately omits temperature/top-p/top-k (it does send the seed per request), so these server flags set the sampling. The Muse-Glimmer default uses `--top-p 0.95 --top-k 64` with the llama-server default temperature. |
 
 ### Muse Glimmer 30B (recommended default)
 

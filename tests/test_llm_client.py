@@ -85,7 +85,7 @@ def test_chat_completion_interruptible_raises_on_interrupt(monkeypatch):
 
     start = time.monotonic()
     with pytest.raises(Interrupt):
-        llm_client._run_chat_completion_interruptible("http://127.0.0.1:1", "m", "sys", "user", None)
+        llm_client._run_chat_completion_interruptible("http://127.0.0.1:1", "m", "sys", "user", None, 0)
     elapsed = time.monotonic() - start
     assert elapsed < 3.0, f"should interrupt before the 5s generation finished, took {elapsed:.2f}s"
 
@@ -112,7 +112,7 @@ def test_start_llama_server_interrupt_kills_server(monkeypatch):
     monkeypatch.setattr(llm_client, "build_command", lambda *a, **k: [sys.executable, "-c", "import time; time.sleep(60)"])
 
     with pytest.raises(Interrupt):
-        llm_client._start_llama_server("fake", "model", 1, 16000, 0, "", "")
+        llm_client._start_llama_server("fake", "model", 1, 16000, "", "")
 
     assert len(created) == 1
     proc = created[0]
@@ -156,7 +156,7 @@ def test_start_llama_server_logs_early_crash(monkeypatch, caplog):
 
     with caplog.at_level(logging.ERROR, logger="llm_client"):
         start = time.monotonic()
-        proc, base_url, _ = llm_client._start_llama_server("server", "model", 1, 16000, 0, "", "")
+        proc, base_url, _ = llm_client._start_llama_server("server", "model", 1, 16000, "", "")
         elapsed = time.monotonic() - start
 
     assert proc is None
@@ -180,3 +180,75 @@ def test_build_command_parses_default_extra_flags():
     assert draft == "C:\\Users\\maxkr\\LLMs\\Muse-Glimmer\\dflash-kquant.gguf"
     assert cmd[cmd.index("--spec-type") + 1] == "draft-dflash"
     assert "--top-p" in cmd and "--top-k" in cmd
+
+
+def test_chat_completion_sends_seed_in_payload(monkeypatch):
+    """chat_completion must send the seed in the request payload so llama-server seeds each request."""
+    import json
+    import llm_client
+
+    captured = {}
+
+    class FakeResp:
+        status = 200
+
+        def read(self):
+            return json.dumps({"choices": [{"message": {"content": "a detailed prompt"}}]}).encode("utf-8")
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    def fake_urlopen(req, timeout=None):
+        captured["payload"] = json.loads(req.data.decode("utf-8"))
+        return FakeResp()
+
+    monkeypatch.setattr(llm_client.request, "urlopen", fake_urlopen)
+    result = llm_client.chat_completion("http://127.0.0.1:1", "model", "system", "user", seed=1234)
+
+    assert result == "a detailed prompt"
+    assert captured["payload"]["seed"] == 1234
+
+
+def test_retry_loop_uses_distinct_seed_per_attempt(monkeypatch):
+    """Each retry attempt must use the next seed value, or retries would repeat identical output."""
+    import llm_client
+
+    seen = []
+
+    def fake_chat(base_url, model_name, system_prompt, user_prompt, images, seed):
+        seen.append(seed)
+        return "too short"  # fails min_words -> loop retries
+
+    monkeypatch.setattr(llm_client, "_run_chat_completion_interruptible", fake_chat)
+    best = llm_client._run_retry_loop("http://127.0.0.1:1", "model", "system", "user", None, max_retries=3, min_words=50, seed=100)
+
+    assert seen == [100, 101, 102]
+    assert best == "too short"
+
+
+def test_retry_loop_negative_seed_is_random_32bit_base(monkeypatch):
+    """seed=-1 must resolve to a random 32-bit base seed that still increments per attempt."""
+    import llm_client
+
+    seen = []
+
+    def fake_chat(base_url, model_name, system_prompt, user_prompt, images, seed):
+        seen.append(seed)
+        return "too short"
+
+    monkeypatch.setattr(llm_client, "_run_chat_completion_interruptible", fake_chat)
+    llm_client._run_retry_loop("http://127.0.0.1:1", "model", "system", "user", None, max_retries=2, min_words=50, seed=-1)
+
+    assert all(0 <= s < 2**32 for s in seen)
+    assert seen[1] == (seen[0] + 1) % 2**32
+
+
+def test_build_command_does_not_pass_seed_flag():
+    """The seed travels in the chat completion payload, not on the llama-server command line."""
+    import llm_client
+
+    cmd = llm_client.build_command("llama-server", "model.gguf", 1234)
+    assert "--seed" not in cmd

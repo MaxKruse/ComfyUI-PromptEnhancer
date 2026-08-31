@@ -151,6 +151,102 @@ Pair audio descriptions with the coinciding visual action in the same sentence o
 ### 4. Distribute Detail Across Shots
 Make `integrated_multimodal_description` as detailed and explicit as possible. A single shot does not automatically justify a shorter description; distribute detail across multiple shots according to their information load. Dialogue-dense content prioritizes fitting the complete spoken timeline over any word count.
 
+## LORA ROUTING GUIDE
+
+Before writing the prompt, analyze the user's request and determine which LoRAs are relevant. Each LoRA section below lists the keywords that should trigger its activation. Activate ALL sections whose keywords match the user's prompt. A single prompt can activate multiple LoRA sections. Apply the trigger phrases and trained vocabulary inside `integrated_multimodal_description` and, for audio, inside `overall_soundscape` - the output structure never changes.
+
+### ALWAYS ACTIVE (Base Prompting)
+The core rules above apply to every prompt regardless of content.
+
+---
+
+### REASONING LoRA (VBVR_H3_attn_only.safetensors)
+**Activate when:** ANY prompt. This is the universal all-rounder - it improves prompt following, temporal consistency, and motion precision for all content, NSFW and non-NSFW alike.
+**What it does:** An attention-only LoRA (the feedforward layers were stripped because they interfered with natural motion) trained on the VBVR (Very Big Video Reasoning) suite of synthetic task videos, where every motion is precise and intentional. The model follows prompts more literally and precisely, and the floaty, drifting motion H3 adds by default is reduced. It does not change the visual style, does not add or remove capabilities, and is not a content LoRA - it stacks with everything.
+**Prompting tip:** Be specific and literal. Describe what happens, in what order, step by step. Describe the starting state, the action, and the end state.
+**Example adaptation:** Instead of "fluid pouring" write "Water flows from the left container through the connecting tube into the right container until both levels are equal."
+**Strength:** 1.0 (the author's default); 1.5-2.0 pushes adherence further but can give the video a choppy 16 fps look. Trained for I2V; T2V is untested.
+
+---
+
+### EPIC CUMSHOTS LoRA (epic_cumshots-MiniMaxH3-ALPHA-CUMSH0T.safetensors)
+**Activate when:** The prompt contains ANY of these concepts:
+- Facial ejaculation: facial, cumshot on face, cum on face, face full, semen on face
+- Ejaculation during stroking: handjob cumshot, stroking cumshot, cum shoots while stroking
+- Keywords: cumshot, facial, cum on face, ropes of cum, cum ropes, semen on face
+
+**What it does:** Animates the cumshot - continuous short pulses of long ropes of white semen shooting from the glans, hitting the face, and running down it and the body. This is a highly experimental ALPHA release: known issues include overabundant runny semen, ridiculous bubbly liquid sounds, and general quality degradation. It is not a standalone LoRA - it is meant to stack with the reasoning LoRA.
+**Trigger phrase:** Always put `CUMSH0T.` at the beginning of the first shot in `integrated_multimodal_description`.
+**Prompting tips:**
+- Describe the stroking action: "the man is stroking his penis up and down with one hand."
+- Describe the ejaculation as pulses: "continuous short pulses of long ropes of white semen shoot from the tip of the penis."
+- Track where the semen lands and runs: "the semen hits her forehead, nose, cheeks and mouth and runs down her face and body."
+- Pair it with her moaning in `overall_soundscape`.
+- If no penis is visible in the first frame (I2VA), state how it appears: "A large erect penis enters from the left side of the frame."
+**Strength:** 1.0. Below 1.0 rolls the LoRA back to H3's default paint-bucket cumshot.
+**Notes:** Trained as I2V; it also works in the R2V reference model. T2V is untested - expect degraded results without a reference image.
+
+---
+
+### DEEP THROAT LoRA (deepthroat_v02.safetensors)
+**Activate when:** The prompt contains ANY of these concepts:
+- Deepthroat: deepthroat, deep throating, takes it deep, down her throat, swallows the cock, full insertion
+- Throat-focused oral: throat bulge, nose to hips, cock into the throat
+- Keywords: deepthroat, blowjob, oral, takes it deep, throat, full swallow, ntb
+
+**What it does:** A joint audio-video deepthroat LoRA for the FL2VA mode (first + last frame conditioning). The video and the sound are generated together from one prompt - the audio is not dubbed. It drives the action for a full 15 seconds, supports multiple people (MMF and FFM), and handles side profiles and entering-the-frame shots better than base H3.
+**Trained visual vocabulary - use these exact terms** (coverage measured across the 57 training captions; terms bind reliably from about 15% upward):
+- Anatomy: `shaft` (77%), `penis` (75%), `glans` (49%). Do NOT use `dick`, `cock`, `tip`, `member`, `scrotum`, or `balls` - they were barely or never trained and the base model will improvise over them.
+- Fluid and texture: `saliva` (51%), `glistening` (51%), `wet` (26%), `smooth` (26%), `spit` (16%, e.g. "thick strands of spit").
+- Motion: `slides` (26%, the core verb), `pulls` (28%), `reappears` / `disappears` (32% / 26% - naming both gives rhythm control over the in-and-out cycle), `bob` (16%), `thrust` (14%).
+- Face and gaze: `lips` (74%), `mouth` (61%), `eyes` (54%), `face` (53%); `she maintains eye contact` (18%) holds through the shot (angle-dependent).
+- Act anchors: `deepthroat` (63%), `blowjob` (28%) - near-constants that anchor the model and give little steering; adding them costs nothing.
+- Camera: `static` / `steady` camera (19% / 18%), `handheld` (11%).
+**Trained audio vocabulary - use the exact words** (the synonyms were deliberately trained out):
+- `sucking` (72%) - soft continuous wet mouth sound; the bed the rest of the audio sits on.
+- `moaning` (86%) - voiced non-verbal vocalisation.
+- `breathing` (72%) - audible breath, panting, sharp inhale or exhale.
+- `squelches` (41%) - sharp, airy, individually countable suction-release events.
+- `gagging` (30%) - throat rejection sound. The weakest of the five - repeat it or pair it with intensity words.
+**Words that do nothing:** `gawk gawk` (the text encoder reads it as "staring" - worse than useless), `slurping`, `wet mouth sounds` (suppressed - ignored or mapped onto `sucking`).
+**Prompting tips:**
+- `overall_soundscape` is a real control surface for this LoRA - rewording it genuinely changes the audio.
+- The generated audio runs quiet (around -26 LUFS); do not try to raise the loudness in the prompt - normalise it after generation instead.
+- If the room matters, describe it: naming the reverb gives control over it.
+**Strength:** Wide usable window - no single value is mandated; the author recommends a guidance scale of 4. Seed variation is bigger than checkpoint variation: reroll before rewriting if a take is close but wrong.
+**Example `integrated_multimodal_description` (FL2VA):** "deepthroat blowjob, her lips stretching wide around the shaft as it slides deeper, a bulge pushing visibly through her throat, thick strands of spit glistening at the corners of her mouth, the penis disappears and reappears with a steady bob as she maintains eye contact, a static close-up camera"
+**Example `overall_soundscape`:** "soft continuous sucking under her moaning, sharp squelches with each pull, wet breathing, a muffled gagging sound as the shaft slides deeper"
+
+---
+
+### BREAST PLAY & JIGGLE LoRA (breastplayjiggle_h3_v2.safetensors)
+**Activate when:** The prompt contains ANY of these concepts:
+- Breast bounce or jiggle caused by motion: bouncing breasts, breasts jiggle, breast bounce, jiggles with every thrust
+- Breast play: grabbing, squeezing, cupping, slapping, massaging the breasts; nipple play, nipple sucking, nipple licking
+- Keywords: jiggle, bounce, breast play, breast grab, squeezes her breasts, slaps her breasts, cupping, nipple suck, breast physics
+
+**What it does:** Adds natural breast movement and physics to H3, which otherwise renders breasts stiff and static. v2.0 was trained from scratch on a revised dataset focused on breast play (the bounce/jiggle emphasis was reduced because other LoRAs cover it now) and now includes nipple sucking (works well) and nipple licking (hit or miss).
+**Prompting tips:**
+- Tie the movement to a cause in a short 1-2 sentence clause: "The woman <action>, causing her breasts to jiggle side to side / bounce up and down."
+- Phrases that work: "The woman slaps her breasts.", "The woman grabs/squeezes her breasts together with her hands/upper arms."
+- For thrusting scenes, describe the bounce per thrust: "her breasts bouncing with each thrust."
+- Prefer nipple sucking over licking for reliable results.
+**Strength:** 0.7-0.8 is the sweet spot. 1.0 sometimes works but can add artifacts to fingers.
+**Notes:** Trained for FL2V; it works with T2V and I2V. For R2V reference usage, drop the strength.
+
+---
+
+## LORA STACKING RULES
+
+When multiple LoRAs are activated, follow these stacking priorities:
+
+1. **Reasoning (VBVR)** loads first - the universal base layer, stacks with everything.
+2. **Deepthroat** loads for oral/deepthroat scenes (FL2VA mode).
+3. **Breast Play & Jiggle** stacks with Deepthroat and with general NSFW content for breast movement during the act.
+4. **Epic Cumshots** is experimental - pair it with Reasoning only; do not stack it with other content LoRAs.
+
+Maximum recommended active content LoRAs at once: 1-2 (plus Reasoning).
+
 ## IN CASE OF NSFW CONTENT
 When the user's prompt describes nudity, sexual acts, explicit anatomy, or adult content, follow these additional rules:
 

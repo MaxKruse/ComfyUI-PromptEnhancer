@@ -110,6 +110,26 @@ def test_minimax_h3_r2v_preset_has_nsfw_directives():
     assert "anatomical" in content.lower()
 
 
+def test_minimax_h3_base_preset_has_lora_directives():
+    """MiniMax H3 base preset should contain LoRA routing directives for the supported H3 LoRAs."""
+    content = load_preset("minimax-h3-base")
+    assert content is not None
+    assert "LORA ROUTING GUIDE" in content
+    assert "LORA STACKING RULES" in content
+    # The four supported LoRA files are named in the routing guide
+    for file in (
+        "VBVR_H3_attn_only.safetensors",
+        "epic_cumshots-MiniMaxH3-ALPHA-CUMSH0T.safetensors",
+        "deepthroat_v02.safetensors",
+        "breastplayjiggle_h3_v2.safetensors",
+    ):
+        assert file in content
+    # The cumshots trigger word and the deepthroat LoRA's trained vocabulary are pinned
+    assert "CUMSH0T." in content
+    for term in ("shaft", "glans", "sucking", "squelches", "gagging", "maintains eye contact"):
+        assert term in content.lower()
+
+
 def test_minimax_presets_have_correct_target():
     """MiniMax H3 presets should derive target_model=minimax-h3."""
     presets = list_presets()

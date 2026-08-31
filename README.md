@@ -116,6 +116,23 @@ The LTX preset includes an intelligent LoRA routing guide. The LLM analyzes your
 
 LoRAs not listed above (e.g. `gemma-3-12b-it-abliterated`, `ltx-2.3-22b-distilled-lora-384-1.1`) are available in the models folder but not recommended - see the preset for details.
 
+### Supported LoRAs (MiniMax H3)
+
+The MiniMax H3 base preset includes an intelligent LoRA routing guide. The LLM analyzes your prompt and activates the relevant LoRA sections based on keyword matching. Multiple LoRAs can activate from a single prompt. All four LoRAs target the base preset's T2VA/I2VA/FL2VA/L2VA modes; the r2v preset is unchanged.
+
+| LoRA File | Activates on | Purpose |
+|-----------|-------------|---------|
+| `VBVR_H3_attn_only.safetensors` | **Always** | Attention-only video reasoning (VBVR suite): universal prompt-following, temporal consistency, and motion precision. Stacks with everything. Strength 1.0. |
+| `epic_cumshots-MiniMaxH3-ALPHA-CUMSH0T.safetensors` | cumshot, facial, cum on face, semen on face, handjob cumshot | ALPHA external-ejaculation animation: ropes of semen from the glans hitting and running down the face. Trigger word `CUMSH0T.` at the start of the first shot. Strength 1.0 (below 1.0 reverts to base behavior). Experimental - stack with the reasoning LoRA only. |
+| `deepthroat_v02.safetensors` | deepthroat, blowjob, takes it deep, throat, swallows the cock, full swallow | Joint audio-video deepthroat for FL2VA (first + last frame, 24 fps). Trained visual and audio vocabulary embedded in the preset - use the exact words (`shaft`, `slides`, `sucking`, `squelches`, ...). Guidance scale 4. |
+| `breastplayjiggle_h3_v2.safetensors` | jiggle, bounce, breast play, grabs, squeezes, slaps, cupping, nipple | Natural breast movement and physics; v2.0 adds nipple sucking and licking. Strength 0.7-0.8 (1.0 risks finger artifacts). |
+
+Workflow pairing notes (the preset only controls the prompt text):
+
+- Epic Cumshots is a highly experimental ALPHA (known issues: runny semen, bubbly liquid sounds, quality drops) - load it with the VBVR reasoning LoRA only.
+- Daring's Deepthroat v0.2 is trained for the FL2VA mode - use a first + last frame pair as the conditioning frames.
+- Deepthroat audio runs quiet (around -26 LUFS, deliberately un-normalised) - normalise it after generation, not in the prompt.
+
 ### Custom Presets
 
 Add `.txt` files to the `presets/` directory. Use the naming convention `<target>-<name>.txt` (e.g. `krea2-t2i-portrait.txt`). The target prefix determines the display label in the dropdown.

@@ -252,3 +252,172 @@ def test_build_command_does_not_pass_seed_flag():
 
     cmd = llm_client.build_command("llama-server", "model.gguf", 1234)
     assert "--seed" not in cmd
+
+
+def test_is_good_prompt_accepts_faithful_expansion():
+    """An expansion that preserves every original word but adds real content must pass the gate."""
+    import llm_client
+
+    original = "a woman in a red dress walks through a rainy street at night"
+    enhanced = (
+        "a woman in a red dress walks through a rainy street at night, "
+        "neon signs reflected in the wet asphalt, steam rising from a grate, "
+        "her umbrella tilted against a hard wind, puddles mirroring the city lights, "
+        "cinematic lighting, film grain, shallow depth of field"
+    )
+
+    assert llm_client.is_good_prompt(enhanced, original, min_words=20)
+
+
+def test_is_good_prompt_rejects_echoes():
+    """A near-verbatim echo of the original must fail the gate even when long enough."""
+    import llm_client
+
+    original = (
+        "a woman in a red dress walks through a rainy street at night "
+        "neon signs reflected in the wet asphalt steam rising from a grate "
+        "her umbrella tilted against a hard wind puddles mirroring the city lights"
+    )
+
+    assert not llm_client.is_good_prompt(original + " again", original, min_words=20)
+
+
+def test_is_good_prompt_rejects_refusal():
+    """Refusal or deflection phrasing must fail the gate."""
+    import llm_client
+
+    refusal = (
+        "I'm sorry, I cannot generate that content for you. Instead I can offer a "
+        "general scene of a woman walking through a city street at night with rain, "
+        "neon reflections, and ambient light, described in a neutral cinematic style "
+        "with no explicit detail, focusing only on the atmosphere and the wet pavement."
+    )
+
+    assert not llm_client.is_good_prompt(refusal, "a woman", min_words=20)
+
+
+def test_retry_loop_never_returns_refusal(monkeypatch):
+    """A refusal must never survive as the fallback best result."""
+    import llm_client
+
+    def fake_chat(base_url, model_name, system_prompt, user_prompt, images, seed):
+        return "I cannot help with that request."
+
+    monkeypatch.setattr(llm_client, "_run_chat_completion_interruptible", fake_chat)
+    best = llm_client._run_retry_loop("http://127.0.0.1:1", "model", "system", "user", None, 2, 50, 1)
+
+    assert best is None
+
+
+def test_retry_loop_prefers_clean_candidate_over_refusal(monkeypatch):
+    """When one attempt is a refusal and another is clean but short, the clean one wins."""
+    import llm_client
+
+    responses = iter([
+        "I cannot assist with that.",
+        "a clean but short prompt",
+    ])
+
+    def fake_chat(base_url, model_name, system_prompt, user_prompt, images, seed):
+        return next(responses)
+
+    monkeypatch.setattr(llm_client, "_run_chat_completion_interruptible", fake_chat)
+    best = llm_client._run_retry_loop("http://127.0.0.1:1", "model", "system", "user", None, 2, 50, 1)
+
+    assert best == "a clean but short prompt"
+
+
+def test_chat_completion_grounds_reference_images_with_labels(monkeypatch):
+    """Each reference image must be preceded by a text label so <Picture N> indices are grounded."""
+    import json
+    import llm_client
+
+    captured = {}
+
+    class FakeResp:
+        def read(self):
+            return json.dumps({"choices": [{"message": {"content": "ok"}}]}).encode("utf-8")
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    def fake_urlopen(req, timeout=None):
+        captured["payload"] = json.loads(req.data.decode("utf-8"))
+        return FakeResp()
+
+    monkeypatch.setattr(llm_client.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(llm_client, "_images_to_base64_jpegs", lambda images: ["AAA", "BBB"])
+
+    llm_client.chat_completion("http://127.0.0.1:1", "model", "system", "user", seed=1, images=[object(), object()])
+
+    content = captured["payload"]["messages"][1]["content"]
+    assert [part["type"] for part in content] == ["text", "text", "image_url", "text", "image_url"]
+    assert content[0]["text"] == "user"
+    assert "<Picture 1>" in content[1]["text"]
+    assert content[2]["image_url"]["url"] == "data:image/jpeg;base64,AAA"
+    assert "<Picture 2>" in content[3]["text"]
+    assert content[4]["image_url"]["url"] == "data:image/jpeg;base64,BBB"
+
+
+def test_chat_completion_prints_inference_speed(monkeypatch, capsys):
+    """Per-attempt llama-server speed (tok/s) and context usage must be printed to the console."""
+    import json
+    import llm_client
+
+    payload = {
+        "choices": [{"message": {"content": "a detailed prompt"}}],
+        "timings": {
+            "cache_n": 236,
+            "prompt_n": 100,
+            "prompt_ms": 500.0,
+            "prompt_per_token_ms": 4.17,
+            "prompt_per_second": 200.0,
+            "predicted_n": 350,
+            "predicted_ms": 8750.0,
+            "predicted_per_token_ms": 25.0,
+            "predicted_per_second": 40.0,
+        },
+        "usage": {"completion_tokens": 350, "prompt_tokens": 336, "total_tokens": 686},
+    }
+
+    class FakeResp:
+        def read(self):
+            return json.dumps(payload).encode("utf-8")
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    def fake_urlopen(req, timeout=None):
+        return FakeResp()
+
+    monkeypatch.setattr(llm_client.request, "urlopen", fake_urlopen)
+    result = llm_client.chat_completion("http://127.0.0.1:1", "model", "system", "user", seed=1)
+
+    assert result == "a detailed prompt"
+    out = capsys.readouterr().out
+    assert "40.0 tok/s" in out
+    assert "350" in out
+    assert "ctx used 686" in out
+
+
+def test_chat_completion_reports_context_overflow(monkeypatch, capsys):
+    """A context-overflow HTTP error must be printed to the console with an actionable hint."""
+    import io
+    import llm_client
+
+    def fake_urlopen(req, timeout=None):
+        body = b'{"error": {"message": "Prompt tokens (16500) exceeds remaining slot context (16384)"}}'
+        raise llm_client.error.HTTPError(req.full_url, 400, "Bad Request", {}, io.BytesIO(body))
+
+    monkeypatch.setattr(llm_client.request, "urlopen", fake_urlopen)
+    result = llm_client.chat_completion("http://127.0.0.1:1", "model", "system", "user", seed=1)
+
+    assert result is None
+    out = capsys.readouterr().out
+    assert "OUT OF CONTEXT" in out

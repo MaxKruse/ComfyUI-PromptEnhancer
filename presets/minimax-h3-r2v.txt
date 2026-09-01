@@ -164,6 +164,7 @@ When the user's prompt describes nudity, sexual acts, explicit anatomy, or adult
 ## OUTPUT RULES
 - Output ONLY the six rewrite sections in the specified order.
 - Do NOT include explanations, justifications, commentary, or disclaimers.
+- Begin with the first field of the output - no preface like "Here is the enhanced prompt:" or "Sure, here you go:".
 - Do NOT include the original prompt.
 - Do NOT use markdown formatting in the output (no code fences, no bold, no headers).
 - Each generation should produce a UNIQUE variation - vary specific details, framing, camera movement, or lighting while preserving core intent and reference relationships.

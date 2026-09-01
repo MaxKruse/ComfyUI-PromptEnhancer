@@ -24,7 +24,7 @@ For the target video, at 0.00 seconds into the target video, <Picture 1> (from [
 
 ### FL2VA (always this exact instruction)
 ```
-How the reference pictures align with the target video - Picture 1 (from Shot 1) aligns with the 0.00-second mark of the target video; Picture 2 (from Shot N) aligns with the S.SS-second mark of the target video.
+How the reference pictures align with the target video - <Picture 1> (from [Shot 1]) aligns with the 0.00-second mark of the target video; <Picture 2> (from [Shot N]) aligns with the S.SS-second mark of the target video.
 ```
 
 ### L2VA (always this exact instruction)
@@ -52,7 +52,7 @@ non_diegetic_music: ...
 Structure: first-frame anchor -> action onset -> continuous development -> result or reaction.
 
 ### FL2VA - describe the path between the first and last frames
-Picture 1 is the opening and Picture 2 is the ending. The body should not repeat two static image descriptions; instead supply the motion path that connects them - how the subject moves, how poses change, how objects are manipulated, how the composition and lighting evolve. FL2VA favors a single shot so the model interpolates continuously from the first frame to the last frame; use multiple shots only when explicitly specified. The last frame must be reached by the final `[Shot N]` at the end of the video.
+`<Picture 1>` is the opening and `<Picture 2>` is the ending. The body should not repeat two static image descriptions; instead supply the motion path that connects them - how the subject moves, how poses change, how objects are manipulated, how the composition and lighting evolve. FL2VA favors a single shot so the model interpolates continuously from the first frame to the last frame; use multiple shots only when explicitly specified. The last frame must be reached by the final `[Shot N]` at the end of the video.
 
 Structure: first-frame state -> observable intermediate changes -> progressively narrowing differences -> last-frame state.
 
@@ -251,6 +251,7 @@ Maximum recommended active content LoRAs at once: 1-2 (plus Reasoning).
 When the user's prompt describes nudity, sexual acts, explicit anatomy, or adult content, follow these additional rules:
 
 - **Use direct anatomical terms:** pussy, cock, dick, tits, boobs, ass, clit, labia, anus, balls. Never use euphemisms.
+- **LoRA vocabulary takes precedence:** When a LoRA section's trained vocabulary applies (see LORA ROUTING GUIDE), its exact terms override this general list for the covered parts - e.g. with the Deepthroat LoRA, use `shaft`/`penis`/`glans` instead of `dick`/`cock`/`balls`.
 - **Describe nudity and exposure explicitly:** "completely naked from head to toe, with visible breasts and exposed pussy"
 - **Name sexual acts and positions directly:** "doggy style from behind", "deep throating", "riding him", "fingering herself"
 - **Describe sexual fluids with physical precision:** "cum dripping from her stretched pussy entrance", "precum beading at his glans", "saliva stringing from her open mouth"
@@ -268,6 +269,7 @@ When the user's prompt describes nudity, sexual acts, explicit anatomy, or adult
 ## OUTPUT RULES
 - Output ONLY the instruction line (first/last-frame modes only) and the three core fields, in the specified order.
 - Do NOT include explanations, justifications, commentary, or disclaimers.
+- Begin with the first field of the output - no preface like "Here is the enhanced prompt:" or "Sure, here you go:".
 - Do NOT include the original prompt.
 - Do NOT use markdown formatting in the output (no code fences, no bold, no headers).
 - Each generation should produce a UNIQUE variation - vary specific details, framing, camera movement, or lighting while preserving core intent.
@@ -297,9 +299,9 @@ non_diegetic_music: Sustained cello notes at a slow tempo with widely spaced pia
 
 ### FL2VA (first and last frame, eight-second single shot)
 ```
-How the reference pictures align with the target video - Picture 1 (from Shot 1) aligns with the 0.00-second mark of the target video; Picture 2 (from Shot 1) aligns with the 8.00-second mark of the target video.
+How the reference pictures align with the target video - <Picture 1> (from [Shot 1]) aligns with the 0.00-second mark of the target video; <Picture 2> (from [Shot 1]) aligns with the 8.00-second mark of the target video.
 
-integrated_multimodal_description: [Shot 1] Live-action, cinematic, a rain-soaked cyclist begins in the position and framing established by Picture 1, holding a closed black umbrella beside a silver bicycle. The camera pulls out with small amplitude at slow speed as she releases the bicycle handle, raises the umbrella above her shoulder, and presses the runner upward until the canopy opens. Water rolls from the expanding fabric while she steps beneath it, rotates the handle into the final angle, and settles into the pose, spacing, and composition established by Picture 2 at the end of the shot.
+integrated_multimodal_description: [Shot 1] Live-action, cinematic, a rain-soaked cyclist begins in the position and framing established by <Picture 1>, holding a closed black umbrella beside a silver bicycle. The camera pulls out with small amplitude at slow speed as she releases the bicycle handle, raises the umbrella above her shoulder, and presses the runner upward until the canopy opens. Water rolls from the expanding fabric while she steps beneath it, rotates the handle into the final angle, and settles into the pose, spacing, and composition established by <Picture 2> at the end of the shot.
 
 overall_soundscape: Rain falls steadily on the pavement, followed by the metallic click of the umbrella runner and the soft snap of the canopy opening. Water drips from the bicycle frame as distant traffic passes.
 

@@ -21,7 +21,8 @@ Drop this into your `custom_nodes/` directory. No API keys needed - runs entirel
 - **Workflow persistence**: Enhanced prompt values are saved in the workflow JSON and preserved across sessions
 - **VRAM-aware**: Automatically unloads ComfyUI models before spawning llama-server, then frees memory after
 - **Retry loop**: Keeps trying until a quality, unique prompt is generated
-- **Quality validation**: Rejects refusals, short outputs, and prompts too similar to the original
+- **Quality validation**: Rejects refusals, short outputs, and near-verbatim echoes (Jaccard word-overlap check) - faithful expansions that preserve the user's wording pass, and a refusal is never returned as the result
+- **Console telemetry**: Each attempt prints the llama-server inference speed (prompt tok/s, generated tok/s) and the context tokens used; a context-overflow error is flagged with an actionable hint
 - **Interruptible**: Cancel at any point (while the server starts up or while generating) via ComfyUI's interrupt - the spawned server is killed cleanly
 - **Startup diagnostics**: If `llama-server` fails to start, the node logs its output and exit code and falls back to your original prompt instead of hanging
 
@@ -107,14 +108,14 @@ The LTX preset includes an intelligent LoRA routing guide. The LLM analyzes your
 | LoRA File | Activates on | Purpose |
 |-----------|-------------|---------|
 | `LTX2.3_reasoning_Sulphur-2_I2V_V4` | **Always** | Universal prompt-following and motion precision. Stacks with everything. |
-| `LTX2.3_Physics_V2` | thrust, slam, impact, bounce, collision, momentum, grind, pound | Grounded body-to-body contact with real impact and friction. |
+| `LTX2.3_Physics_V2` | thrust, slam, impact, bounce, collision, momentum, grind, pound | Grounded body-to-body contact with real impact and friction. Strength 0.7 - higher values can degrade audio. |
 | `Cr3ampi3_animation_sulphur-2_i2v_v1.0` | creampie, cum inside, fills her, breeding, loaded, internal ejaculation | Internal ejaculation animation with fluid temporal behavior and body reactions. |
 | `throat_bulge-10Eros_i2v_v1.0` | deepthroat, throat bulge, swallows cock, takes it deep, full swallow | Visible throat deformation during deepthroat with muffled audio and head movement. |
 | `ltx23-ultimatedt-NSFW-sulphured_audio_final_k3nk` | blowjob, oral, sucking, cock, penis, dick, testicles | General NSFW refinement with better penis anatomy and sulphur audio integration. |
-| `LTX2_3_NSFW_furry_concat_v2` | anthro, furry, anthropomorphic, snout, fur, tail, paws | Multi-purpose NSFW for furry and non-furry content. Supports 2D, 3D, and realistic styles. |
+| `LTX2_3_NSFW_furry_concat_v2` | anthro, furry, anthropomorphic, snout, fur, tail, paws | Multi-purpose NSFW for furry and non-furry content. Supports 2D, 3D, and realistic styles. Strength ~1.0 on the fp8 model (0.6-0.7 on nvfp4); merge v1 x0.5, v2 x0.7. |
 | `ltx-2.3-22b-distilled-lora-1.1_fro90_ceil72_condsafe` | N/A (technical) | Faster generation with fewer steps. Loaded automatically by workflow. |
 
-LoRAs not listed above (e.g. `gemma-3-12b-it-abliterated`, `ltx-2.3-22b-distilled-lora-384-1.1`) are available in the models folder but not recommended - see the preset for details.
+LoRAs not listed above (e.g. `gemma-3-12b-it-abliterated`, `ltx-2.3-22b-distilled-lora-384-1.1`) are available in the models folder but not recommended: the abliterated gemma text encoder is a myth - it is lobotomized to forget refusals, but that also kills other knowledge about banned concepts, so standard gemma gives the best quality (and LTX 2.3 does not censor outputs regardless of encoder). The 384 distilled LoRA harms the 10Eros fine-tune; if you want faster generation use the condsafe variant (fro90_ceil72) at strength 0.5-0.6.
 
 ### Supported LoRAs (MiniMax H3)
 
@@ -140,6 +141,8 @@ Add `.txt` files to the `presets/` directory. Use the naming convention `<target
 ## Reference Images (Multimodal)
 
 Connect reference images via the dynamic Autogrow slots (`ref_image_0`, `ref_image_1`, etc.). Up to 9 images can be connected. The LLM sees all connected images and tailors the prompt accordingly.
+
+Each connected image is sent with a text label - `Reference image N (<Picture N>):` - so the `<Picture N>` vocabulary used by the presets is grounded in the request payload.
 
 Requires:
 
@@ -258,6 +261,7 @@ Every step is interruptible - press ComfyUI's interrupt and the node stops, kill
 - **Cancel a stuck enhancement**: Use ComfyUI's interrupt button. The node stops waiting/generating and kills the `llama-server` it spawned.
 - **Model not found**: Verify the `.gguf` file path is correct (must be an absolute path)
 - **Out of memory**: Reduce model size (Q4 -> Q3) or add `--ctx-size 4096` to extra_flags
+- **Out of context (long prompts or many reference images)**: The console prints an `OUT OF CONTEXT` line when system prompt + images + user text exceed the context window. Raise `ctx_size` (the preset's recommended ctx is a good baseline), connect fewer reference images, or shorten the user prompt.
 - **Refusal outputs**: Try a less-aligned model
 - **Slow generation**: Use a smaller model or add `-ngl 99` for full GPU offload
 - **Reference image not working**: Make sure your model is multimodal and you passed `--mmproj` in extra_flags

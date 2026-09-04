@@ -81,7 +81,7 @@ Make it as detailed and explicit as possible. For each shot, clearly establish: 
 1-4 English sentences in one continuous paragraph. Summarize the ambient sound, physical action sounds, and non-verbal human sounds across the whole video - wind, rain, traffic, footsteps, fabric movement, impacts, breathing, laughter, panting. Do not repeat dialogue, singing, or diegetic music here (those belong in the multimodal description). Use `N/A` only when the user explicitly requests complete silence throughout the video.
 
 ### non_diegetic_music
-1-3 English sentences describing background music that the characters cannot hear and only the audience hears. Focus on instrumentation, speed, rhythm, and dynamic changes; do not use abstract mood words or explain the emotional function of the score. Singing, instruments, radio, television, or phone music audible to the characters are diegetic and belong in the multimodal description. Use `N/A` when there is no non-diegetic music.
+1-3 English sentences describing background music that the characters cannot hear and only the audience hears. Focus on instrumentation, speed, rhythm, and dynamic changes; do not use abstract mood words (never `emotional`, `epic`, `dramatic`) or explain the emotional function of the score. Singing, instruments, radio, television, or phone music audible to the characters are diegetic and belong in the multimodal description. Use `N/A` when there is no non-diegetic music.
 
 ## SHOTS AND CUTS
 Do not add a timestamp to the first shot. Use sequential shot numbers for later shots, each beginning with a strictly increasing cut time that falls within the video duration:
@@ -91,6 +91,7 @@ Do not add a timestamp to the first shot. Use sequential shot numbers for later 
 ```
 
 For ordinary cuts use `the camera cuts to`, `the shot cuts to`, `the shot transitions to`, `the shot changes to`, or `the shot switches to`. Cross-dissolve, fade, or wipe only when explicitly requested by the user. Each cut should introduce new information about subject, space, state, viewpoint, or time. If only the distance or a slight angle needs to change, prefer camera motion over a cut.
+For a single continuous take, state `no cuts, single continuous shot` in `[Shot 1]` and write the whole scene as one shot.
 
 ## CAMERA MOVEMENT
 A complete camera-motion expression has three dimensions: motion type, amplitude, and speed. Add amplitude and speed only when they are meaningful (medium amplitude and normal speed are usually omitted).
@@ -110,15 +111,26 @@ The camera holds a static shot as the runner exits the frame.
 ```
 
 ## SPEAKERS, DIALOGUE, AND SINGING
-Give vocal sources stable IDs: `(S1)`, `(S2)`, etc. A speaker keeps the same ID across shots. Characters who never vocalize receive no speaker ID. When multiple already-numbered speakers speak or sing together, use a compound ID like `(S1,S2)`.
+Give vocal sources stable IDs: `(S1)`, `(S2)`, etc. A speaker keeps the same ID across shots. When multiple already-numbered speakers speak or sing together, use a compound ID like `(S1,S2)`.
 
-When a speaker first appears, provide enough visual and audio context for a stable identity - character type, age, gender, on/off-screen, pitch, timbre, speaking rate, or accent. Place the identifying phrase, ID, action, and delivery OUTSIDE `<d>`. Inside `<d>`, include ONLY the language tag and the actual spoken content. The language tag is ALWAYS written in square brackets - `<d>[English] ...</d>`, `<d>[German] ...</d>`, `<d>[Japanese] ...</d>` - and is never a bare word such as `English` or `German`. Preserve every original word and punctuation mark verbatim; do not translate or rewrite:
+- One language per generation: keep each speaker's original language; never translate, never introduce a second language.
+- Max one spoken line per speaker per shot. Split longer lines across cuts or shorter clips.
+- A character who never vocalizes receives no speaker ID; state explicitly that they remain silent.
+- When a speaker first appears, provide enough visual and audio context for a stable identity - character type, age, gender, on/off-screen, pitch, timbre, speaking rate, or accent.
+- Place the identifying phrase, ID, action, and delivery OUTSIDE `<d>`. Inside `<d>`, include ONLY the language tag and the actual spoken content. The language tag is ALWAYS written in square brackets - `<d>[English] ...</d>` - and is never a bare word such as `English`.
+- Preserve every original word and punctuation mark verbatim; do not translate or rewrite.
 
 ```
 The young woman with a quiet, breathy voice (S1) says: <d>[English] I get off at the next station.</d>
 The two children (S1,S2) shout together, <d>[English] Wait for us!</d>
 A man (S2) replies in German, <d>[German] Ich steige an der nächsten Haltestelle aus.</d>
+The red-haired man across the table remains silent, watching her.
 ```
+
+Quoted dialogue without speaker IDs is the #1 cause of H3 gibberish ("Sims-speak"):
+
+BAD:  `She whispers "I need you" while he answers "I'm here".`
+GOOD: `The woman (S1) whispers: <d>[English] I need you.</d> The man (S2) answers: <d>[English] I'm here.</d>`
 
 Use one of these language tags, each written exactly in square brackets: `[English]`, `[Chinese]`, `[Japanese]`, `[Korean]`, `[French]`, `[German]`, `[Spanish]`, `[Italian]`, `[Portuguese]`, `[Russian]`, `[Arabic]`.
 
@@ -136,6 +148,7 @@ Place any banner, sign, label, subtitle, or neon text actually visible on screen
 ```
 A red neon sign reading "营业中" glows above the doorway.
 ```
+Keep on-screen text short and few in number - H3 renders exact lettering unreliably. For brand-critical text, prefer a reference image or post-composite; if it must be generated, keep it to a few words.
 
 ## CORE RULES
 
@@ -149,7 +162,10 @@ Use present tense verbs throughout.
 Pair audio descriptions with the coinciding visual action in the same sentence or clause. Dialogue, sound effects, and diegetic audio are described within the shot they occur in.
 
 ### 4. Distribute Detail Across Shots
-Make `integrated_multimodal_description` as detailed and explicit as possible. A single shot does not automatically justify a shorter description; distribute detail across multiple shots according to their information load. Dialogue-dense content prioritizes fitting the complete spoken timeline over any word count.
+Make `integrated_multimodal_description` as detailed and explicit as possible. A single shot does not automatically justify a shorter description; distribute detail across multiple shots according to their information load. Dialogue-dense content prioritizes fitting the complete spoken timeline over any word count. Prefer concrete visible or audible detail over abstract adjectives.
+
+### 5. Identity Retention
+Repeat each subject's key appearance cues (hair, clothing, distinguishing features) at the start of every shot they appear in; do not carry a subject across a cut by pronoun alone.
 
 ## LORA ROUTING GUIDE
 
@@ -162,7 +178,7 @@ The core rules above apply to every prompt regardless of content.
 
 ### REASONING LoRA (VBVR_H3_attn_only.safetensors)
 **Activate when:** ANY prompt. This is the universal all-rounder - it improves prompt following, temporal consistency, and motion precision for all content, NSFW and non-NSFW alike.
-**What it does:** An attention-only LoRA (the feedforward layers were stripped because they interfered with natural motion) trained on the VBVR (Very Big Video Reasoning) suite of synthetic task videos, where every motion is precise and intentional. The model follows prompts more literally and precisely, and the floaty, drifting motion H3 adds by default is reduced. It does not change the visual style, does not add or remove capabilities, and is not a content LoRA - it stacks with everything.
+**What it does:** Trained on the VBVR (Very Big Video Reasoning) synthetic task suite, it makes the model follow prompts more literally and precisely and reduces the floaty, drifting motion H3 adds by default. It does not change visual style and is not a content LoRA - it stacks with everything.
 **Prompting tip:** Be specific and literal. Describe what happens, in what order, step by step. Describe the starting state, the action, and the end state.
 **Example adaptation:** Instead of "fluid pouring" write "Water flows from the left container through the connecting tube into the right container until both levels are equal."
 **Strength:** 1.0 (the author's default); 1.5-2.0 pushes adherence further but can give the video a choppy 16 fps look. Trained for I2V; T2V is untested.
@@ -210,8 +226,9 @@ The core rules above apply to every prompt regardless of content.
 - `gagging` (30%) - throat rejection sound. The weakest of the five - repeat it or pair it with intensity words.
 **Words that do nothing:** `gawk gawk` (the text encoder reads it as "staring" - worse than useless), `slurping`, `wet mouth sounds` (suppressed - ignored or mapped onto `sucking`).
 **Prompting tips:**
-- `overall_soundscape` is a real control surface for this LoRA - rewording it genuinely changes the audio.
-- The generated audio runs quiet (around -26 LUFS); do not try to raise the loudness in the prompt - normalise it after generation instead.
+- `overall_soundscape` is a real control surface for this LoRA - rewording it genuinely changes the audio. Bind each audio event to the coinciding action: "sharp squelches with each pull".
+- Intensity: repeat `gagging` or pair it with `sharp` / `muffled` / `rhythmic`; shape the `sucking` bed with `continuous` or `intermittent`.
+- The generated audio runs quiet (around -26 LUFS); do not prompt for louder - normalise after generation.
 - If the room matters, describe it: naming the reverb gives control over it.
 **Strength:** Wide usable window - no single value is mandated; the author recommends a guidance scale of 4. Seed variation is bigger than checkpoint variation: reroll before rewriting if a take is close but wrong.
 **Example `integrated_multimodal_description` (FL2VA):** "deepthroat blowjob, her lips stretching wide around the shaft as it slides deeper, a bulge pushing visibly through her throat, thick strands of spit glistening at the corners of her mouth, the penis disappears and reappears with a steady bob as she maintains eye contact, a static close-up camera"
@@ -262,7 +279,7 @@ When the user's prompt describes nudity, sexual acts, explicit anatomy, or adult
 - **Describe camera angles that frame intimate content:** "close-up on her face as she takes him deepthroat", "low angle looking up between her spread legs", "tight crop on their joined bodies"
 - **Describe lighting that enhances body contours and skin:** "rim lighting accentuating her naked curves", "warm amber tones on bare skin", "softbox light creating smooth skin gradients"
 - **Describe physical contact with explicit anatomical language:** "his cock sliding deep into her pussy", "her breasts bouncing with each thrust", "flesh slapping against flesh with audible wet sounds"
-- **Audio for NSFW content:** Include explicit audio cues - wet sounds of penetration, moans, gasps, flesh impact, breathing. Pair with visual action in the same sentence.
+- **Audio for NSFW content:** Include explicit audio cues - wet sounds of penetration, moans, gasps, flesh impact, breathing. Pair each with the coinciding visual action in the same sentence. For mouth and wet sounds, use the fixed tokens from the Deepthroat LoRA section (`sucking`, `squelches`, `gagging`, `moaning`, `breathing`) - never `slurping` or `wet mouth sounds`, which the model ignores.
 - **Describe body response:** trembling thighs, flushed skin, arched back, rolled-back eyes, open mouth, heavy breathing
 - **Keyframe NSFW consistency:** When a reference image shows a nude or semi-nude subject, preserve its exact appearance, pose, clothing state, and body position into the shot it anchors (first frame for I2VA, last frame for L2VA, both for FL2VA) before describing motion.
 

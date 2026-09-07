@@ -8,6 +8,7 @@ Drop this into your `custom_nodes/` directory. No API keys needed - runs entirel
 
 - **KREA 2 T2I** - text-to-image prompt expansion based on [Krea-2's official `expansion.txt`](https://github.com/krea-ai/krea-2/blob/main/docs/expansion.txt) and community research
 - **LTX 2.3 10Eros I2V** - image-to-video motion prompt engineering based on [LTX 2.3 official prompt guide](https://ltx.io/blog/ltx-2-3-prompt-guide) and community research
+- **LTX 2.5 I2V** - image-to-video delta prompting for single continuous takes with native synchronized audio, based on the [official LTX-2.5 prompting guide](https://docs.ltx.io/api-documentation/implementation-guides/prompting-guide) and community research
 - **MiniMax H3 T2V/I2V** - text-to-video and image-to-video prompt generation based on the [official MiniMax H3 Video Prompt Writing Guide](https://huggingface.co/MiniMaxAI/MiniMax-H3/resolve/main/docs/VIDEO_PROMPT_WRITING_GUIDE_base_en.md)
 - **MiniMax H3 R2V** - reference-to-video structured rewrite outputs based on the [official MiniMax H3 Full-Reference Mode guide](https://platform.minimaxi.com/document/minimax-h3-full-reference-mode-guide)
 
@@ -83,10 +84,11 @@ Prompt enhancement with retry loop.
 |--------------|--------|-------------|----------------------|
 | `KREA 2 T2I` | KREA 2 Text-to-Image | Prompt expansion for both SFW and NSFW content. Based on the [Krea 2 technical report](https://www.krea.ai/blog/krea-2-technical-report), the [official Krea-2 expander guidelines](https://github.com/krea-ai/krea-2/blob/main/docs/expansion.txt), [community research](https://civitai.com/models/2749367), and the [SNOFS v1.3D](https://civitai.red/models/1972981/snofs-sex-nudes-other-fun-stuff?modelVersionId=3220691) LoRA directives | 4096 |
 | `LTX 2.3 10Eros I2V` | LTX 2.3 Image-to-Video | Motion prompt engineering for both SFW and NSFW content. Based on [official LTX 2.3 guide](https://ltx.io/blog/ltx-2-3-prompt-guide) and [community research](https://huggingface.co/TenStrip/LTX2.3-10Eros_Workflows) | 8192 |
+| `LTX 2.5 - i2v` | LTX 2.5 Image-to-Video | Single continuous take from the given first frame - the image carries all static detail, the prompt commands only motion, camera, and native synchronized audio (delta prompting). Physical emotion cues, pacing beats for auto-duration, direct anatomical NSFW directives. Based on the [official LTX-2.5 prompting guide](https://docs.ltx.io/api-documentation/implementation-guides/prompting-guide) and [community research](https://civitai.com/models/2318870). | 8192 |
 | `MiniMax H3 - base` | MiniMax H3 Text/Image-to-Video | Three-section prompts (`integrated_multimodal_description`, `overall_soundscape`, `non_diegetic_music`) with shot-by-shot camera, audio, and dialogue. Auto-detects T2VA (no images) vs I2VA (reference image(s) as first frame). Based on the [official MiniMax H3 Video Prompt Writing Guide](https://huggingface.co/MiniMaxAI/MiniMax-H3/resolve/main/docs/VIDEO_PROMPT_WRITING_GUIDE_base_en.md). Handles both SFW and NSFW content. | 20000 |
 | `MiniMax H3 - r2v` | MiniMax H3 Reference-to-Video | Structured full-reference rewrite outputs for R2V. Based on the [official MiniMax H3 Full-Reference Mode guide](https://platform.minimaxi.com/document/minimax-h3-full-reference-mode-guide). Handles both SFW and NSFW content. | 20000 |
 
-Recommended context size for `llama-server -c` (the node defaults to 20000). Each request fits in: system prompt + user prompt + reference images (via mmproj, roughly 0.5-2k tokens per image) + the expanded output. Budgets: KREA 2 T2I is text-only (about 1.2k system + about 0.5k output = under 2k, so 4096 leaves 2x headroom); LTX 2.3 I2V adds 1-2 reference images (about 4-7k total); MiniMax H3 base can output uncapped, dialogue-dense descriptions (about 8k with a first-frame image); MiniMax H3 r2v takes several reference images plus a 350-500 word output (about 7-9k). Reference images dominate the budget: every connected image adds roughly 0.5-2k tokens, so a multi-image job scales up fast - that is why the MiniMax H3 presets recommend 20000. Lowering `-c` for text-only work saves KV-cache RAM; if you run a reasoning model with thinking enabled, keep the preset's recommended value (20000 for MiniMax H3) so the thinking budget does not starve the output.
+Recommended context size for `llama-server -c` (the node defaults to 20000). Each request fits in: system prompt + user prompt + reference images (via mmproj, roughly 0.5-2k tokens per image) + the expanded output. Budgets: KREA 2 T2I is text-only (about 1.2k system + about 0.5k output = under 2k, so 4096 leaves 2x headroom); LTX 2.3/2.5 I2V adds 1-2 reference images (about 4-7k total); MiniMax H3 base can output uncapped, dialogue-dense descriptions (about 8k with a first-frame image); MiniMax H3 r2v takes several reference images plus a 350-500 word output (about 7-9k). Reference images dominate the budget: every connected image adds roughly 0.5-2k tokens, so a multi-image job scales up fast - that is why the MiniMax H3 presets recommend 20000. Lowering `-c` for text-only work saves KV-cache RAM; if you run a reasoning model with thinking enabled, keep the preset's recommended value (20000 for MiniMax H3) so the thinking budget does not starve the output.
 
 Each preset contains both general and NSFW-specific directives. The LLM detects the content type from your prompt and applies the appropriate rules automatically - no need to switch presets.
 
@@ -116,6 +118,10 @@ The LTX preset includes an intelligent LoRA routing guide. The LLM analyzes your
 | `ltx-2.3-22b-distilled-lora-1.1_fro90_ceil72_condsafe` | N/A (technical) | Faster generation with fewer steps. Loaded automatically by workflow. |
 
 LoRAs not listed above (e.g. `gemma-3-12b-it-abliterated`, `ltx-2.3-22b-distilled-lora-384-1.1`) are available in the models folder but not recommended: the abliterated gemma text encoder is a myth - it is lobotomized to forget refusals, but that also kills other knowledge about banned concepts, so standard gemma gives the best quality (and LTX 2.3 does not censor outputs regardless of encoder). The 384 distilled LoRA harms the 10Eros fine-tune; if you want faster generation use the condsafe variant (fro90_ceil72) at strength 0.5-0.6.
+
+### Supported LoRAs (LTX 2.5 I2V)
+
+No routing guide is embedded - the LTX 2.5 LoRA ecosystem is still young and no standard NSFW LoRA suite has been established (the 2.3 Sulphur/10Eros LoRAs do not port). Character and style LoRAs tagged LTXV 2.5 load as usual, e.g. the [LTX-2.5 3D Animation Style](https://civitai.com/models/2895989) LoRA (trigger `3dsrx`, strength around 0.4 for I2V).
 
 ### Supported LoRAs (MiniMax H3)
 
@@ -206,7 +212,7 @@ Adds `--mmproj` for vision input so the LLM can see the reference image(s). Same
 
 The preset handles both SFW and NSFW content automatically based on your prompt.
 
-### LTX 2.3 Image-to-Video
+### LTX Image-to-Video (2.3 / 2.5)
 
 ```
 [Load Image] -> [Prompt Enhancer (preset: LTX 2.3 10Eros I2V, ref_image_0 connected)]
@@ -214,6 +220,8 @@ The preset handles both SFW and NSFW content automatically based on your prompt.
 ```
 
 The reference image(s) let the LLM see the source frame(s) and describe motion relative to what's already visible. Multiple reference images can be connected via Autogrow slots. The preset handles both SFW and NSFW content automatically.
+
+The `LTX 2.5 - i2v` preset uses the same wiring - just pick it in the preset dropdown. It prompts the delta only (what happens next from the first frame) plus native synchronized audio, and it embeds no LoRA routing guide (see above).
 
 ### MiniMax H3 Text-to-Video (T2V)
 

@@ -67,10 +67,43 @@ def test_ltx2_3_i2v_preset_has_nsfw_directives():
     assert "anatomical" in content.lower()
 
 
+def test_ltx2_5_i2v_preset_exists():
+    """LTX 2.5 image-to-video preset should exist."""
+    info = get_preset_by_key("ltx2.5-i2v")
+    assert info is not None
+    assert info.display_name == "LTX 2.5 - i2v"
+    assert info.target_model == "ltx2.5"
+    content = load_preset("ltx2.5-i2v")
+    assert content is not None
+    assert "image-to-video" in content.lower()
+
+
+def test_ltx2_5_i2v_preset_has_key_content():
+    """LTX 2.5 preset should contain the I2V delta-prompting contract."""
+    content = load_preset("ltx2.5-i2v")
+    assert content is not None
+    lowered = content.lower()
+    # The source image carries the static information; the prompt commands only the delta
+    assert "source image provides all static visual information" in lowered
+    # LTX 2.5 renders synchronized video and audio in one pass
+    assert "video and audio" in lowered
+    # Single continuous take from the given first frame
+    assert "first frame" in lowered
+
+
+def test_ltx2_5_i2v_preset_has_nsfw_directives():
+    """LTX 2.5 preset should contain NSFW directives for auto-detection."""
+    content = load_preset("ltx2.5-i2v")
+    assert content is not None
+    assert "NSFW" in content
+    assert "anatomical" in content.lower()
+
+
 def test_no_separate_nsfw_presets():
     """NSFW presets should be merged into main presets, not separate files."""
     assert load_preset("krea2-t2i-nsfw") is None
     assert load_preset("ltx2.3-10eros-i2v-nsfw") is None
+    assert load_preset("ltx2.5-i2v-nsfw") is None
 
 
 def test_minimax_h3_r2v_preset_exists():
@@ -143,6 +176,7 @@ def test_target_model_labels_complete():
     """Target model labels should cover all supported models."""
     assert "krea2-t2i" in TARGET_MODEL_LABELS
     assert "ltx2.3-10eros-i2v" in TARGET_MODEL_LABELS
+    assert "ltx2.5" in TARGET_MODEL_LABELS
     assert "minimax-h3" in TARGET_MODEL_LABELS
 
 
@@ -192,12 +226,16 @@ def test_krea2_presets_have_correct_target():
 
 
 def test_ltx_presets_have_correct_target():
-    """LTX presets should derive target_model=ltx2.3-10eros-i2v."""
+    """LTX presets should derive their per-family target model."""
     presets = list_presets()
-    ltx_presets = [p for p in presets if p.key.startswith("ltx2.3-")]
-    assert len(ltx_presets) > 0
-    for p in ltx_presets:
+    ltx23_presets = [p for p in presets if p.key.startswith("ltx2.3-")]
+    assert len(ltx23_presets) > 0
+    for p in ltx23_presets:
         assert p.target_model == "ltx2.3-10eros-i2v"
+    ltx25_presets = [p for p in presets if p.key.startswith("ltx2.5-")]
+    assert len(ltx25_presets) > 0
+    for p in ltx25_presets:
+        assert p.target_model == "ltx2.5"
 
 
 def test_get_preset_by_key():

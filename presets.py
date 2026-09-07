@@ -3,6 +3,7 @@
 Presets are organized by target model prefix:
   - krea2-t2i : KREA-2 text-to-image preset (general + NSFW auto-detect)
   - ltx2.3-10eros-i2v : LTX 2.3 10Eros image-to-video preset (general + NSFW auto-detect)
+  - ltx2.5-i2v : LTX 2.5 image-to-video preset (general + NSFW auto-detect)
   - minimax-h3-base : MiniMax H3 Text-to-Video + Image-to-Video (T2V/I2V) preset (general + NSFW auto-detect)
   - minimax-h3-r2v : MiniMax H3 Reference-to-Video (R2V) preset (general + NSFW auto-detect)
 
@@ -31,6 +32,7 @@ class PresetInfo(NamedTuple):
 TARGET_MODEL_LABELS: dict[str, str] = {
     "krea2-t2i": "KREA 2 T2I",
     "ltx2.3-10eros-i2v": "LTX 2.3 10Eros I2V",
+    "ltx2.5": "LTX 2.5",
     "minimax-h3": "MiniMax H3",
 }
 

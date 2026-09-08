@@ -18,6 +18,7 @@ Drop this into your `custom_nodes/` directory. No API keys needed - runs entirel
 - **Uncensored directive**: System prompts are prepended with an uncensored instruction to reduce refusals and ensure the model follows instructions
 - **Seeded sampling**: The seed is sent to the LLM per request; each retry attempt uses the next seed value, so retries produce genuinely different output
 - **Dynamic reference images**: Connect 0-9 reference images via Autogrow slots (requires a multimodal GGUF + `--mmproj` flag)
+- **Vision-aware prompting**: The system prompt tells the LLM at runtime whether the reference images are actually visible - with images it grounds the anchor in what the frame shows, without them it anchors only on what you wrote, so a forgotten mmproj cannot make it invent frame details
 - **Bypass-safe**: When the node is disabled/bypassed, the original prompt passes through unchanged
 - **Workflow persistence**: Enhanced prompt values are saved in the workflow JSON and preserved across sessions
 - **VRAM-aware**: Automatically unloads ComfyUI models before spawning llama-server, then frees memory after
@@ -105,7 +106,7 @@ Workflow pairing notes (the preset only controls the positive prompt):
 
 ### Supported LoRAs (LTX 2.3 10Eros I2V)
 
-The LTX preset includes an intelligent LoRA routing guide. The LLM analyzes your prompt and activates the relevant LoRA sections based on keyword matching. Multiple LoRAs can activate from a single prompt.
+The LTX preset includes an intelligent LoRA routing guide. The LLM never receives a list of active LoRAs, so it infers them from the described scenario - it matches the depicted scene, not literal keywords, and activates none when no section matches. Multiple LoRAs can activate from a single prompt.
 
 | LoRA File | Activates on | Purpose |
 |-----------|-------------|---------|
@@ -121,7 +122,7 @@ LoRAs not listed above (e.g. `gemma-3-12b-it-abliterated`, `ltx-2.3-22b-distille
 
 ### Supported LoRAs (LTX 2.5 I2V)
 
-The LTX 2.5 preset includes an intelligent LoRA routing guide. The LLM analyzes your prompt and activates the relevant LoRA sections based on keyword matching. Multiple LoRAs can activate from a single prompt. The LoRAs live in the `models/loras/ltx2.5` folder; several of them were trained on LTX 2.3, but LTX 2.5 shares the same transformer, so they load and work without changes.
+The LTX 2.5 preset includes an intelligent LoRA routing guide. The LLM never receives a list of active LoRAs, so it infers them from the described scenario - it matches the depicted scene, not literal keywords, and activates none when no section matches. Multiple LoRAs can activate from a single prompt. The LoRAs live in the `models/loras/ltx2.5` folder; several of them were trained on LTX 2.3, but LTX 2.5 shares the same transformer, so they load and work without changes.
 
 | LoRA File | Activates on | Purpose |
 |-----------|-------------|---------|
@@ -138,7 +139,7 @@ Notes:
 
 ### Supported LoRAs (MiniMax H3)
 
-The MiniMax H3 base preset includes an intelligent LoRA routing guide. The LLM analyzes your prompt and activates the relevant LoRA sections based on keyword matching. Multiple LoRAs can activate from a single prompt. All four LoRAs target the base preset's T2VA/I2VA/FL2VA/L2VA modes; the r2v preset is unchanged.
+The MiniMax H3 base preset includes an intelligent LoRA routing guide. The LLM never receives a list of active LoRAs, so it infers them from the described scenario - it matches the depicted scene, not literal keywords, and activates none when no section matches. Multiple LoRAs can activate from a single prompt. All four LoRAs target the base preset's T2VA/I2VA/FL2VA/L2VA modes; the r2v preset is unchanged.
 
 | LoRA File | Activates on | Purpose |
 |-----------|-------------|---------|
@@ -162,6 +163,8 @@ Add `.txt` files to the `presets/` directory. Use the naming convention `<target
 Connect reference images via the dynamic Autogrow slots (`ref_image_0`, `ref_image_1`, etc.). Up to 9 images can be connected. The LLM sees all connected images and tailors the prompt accordingly.
 
 Each connected image is sent with a text label - `Reference image N (<Picture N>):` - so the `<Picture N>` vocabulary used by the presets is grounded in the request payload.
+
+The node appends a short runtime line to the system prompt stating what the LLM can actually see: with a connected image and a valid `--mmproj` it is told to ground the anchor in what is visibly true in the image plus what you wrote; without either, it is told that no reference image is available and to anchor only on the user's prompt. This keeps a blind run (image connected but no mmproj, or no image at all) from inventing frame details that do not match the real first frame.
 
 Requires:
 

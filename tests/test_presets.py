@@ -298,3 +298,15 @@ def test_all_presets_load_without_error():
         content = load_preset(p.key)
         assert content is not None, f"Preset {p.key} should load"
         assert len(content) > 50, f"Preset {p.key} should have meaningful content"
+
+
+def test_routing_guides_infer_loras_from_scenario():
+    """Routing guides must instruct scenario-based inference: the LLM never receives
+    a list of active LoRAs, so it must infer them from the described scene, not
+    literal keywords, and activate none when nothing matches."""
+    for key in ("ltx2.3-10eros-i2v", "ltx2.5-i2v", "minimax-h3-base"):
+        content = load_preset(key)
+        assert content is not None, key
+        assert "infer from the described scenario" in content, key
+        assert "not on literal keywords" in content, key
+        assert "activate none" in content, key

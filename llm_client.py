@@ -53,6 +53,27 @@ REFUSAL_PATTERNS = (
 )
 
 
+def _vision_context_note(images) -> str:
+    """Runtime line appended to the system prompt: tells the LLM exactly what it can see.
+
+    Presets are static text but the wiring is not: the same preset runs with reference
+    images visible (mmproj set + images connected) or blind (either missing). A blind run
+    is told not to assume frame details, so a forgotten mmproj cannot make the LLM
+    invent a source frame that does not match the actual first frame.
+    """
+    if images:
+        return (
+            " You can see the reference image(s) in the user message, labeled <Picture 1> and so on. "
+            "They show the actual source frame(s). Ground the anchor in what is visibly true in the image "
+            "plus what the user wrote; never invent details that are in neither."
+        )
+    return (
+        " No reference image is available to you. If the rules above refer to a source image or the "
+        "current frame, there is none: do not assume or describe any detail about it - anchor using "
+        "only what the user's prompt says."
+    )
+
+
 def _print_safe(msg: str):
     """Thread-safe print wrapper that survives non-UTF-8 console codepages (e.g. cp1252)."""
     with _print_lock:
@@ -559,8 +580,8 @@ def enhance_prompt(
     ready_time = time.monotonic()
     _print_safe(f"  [PromptEnhancer] Server ready in {ready_time - start:.1f}s. Model: {model_name}")
 
-    # Prepend uncensored directive to override safety filters
-    effective_system_prompt = UNCENSORED_PREFIX + system_prompt
+    # Prepend the uncensored directive; append the runtime note so the LLM knows what it can see
+    effective_system_prompt = UNCENSORED_PREFIX + system_prompt + _vision_context_note(images)
 
     try:
         best_result = _run_retry_loop(base_url, model_name, effective_system_prompt, user_prompt, images, max_retries, min_words, seed)

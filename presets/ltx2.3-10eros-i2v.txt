@@ -66,7 +66,7 @@ Describe a single continuous shot with one visual beat. Do not chain multiple sc
 
 ## LORA ROUTING GUIDE
 
-Before writing the prompt, analyze the user's request and determine which LoRAs are relevant. Each LoRA section below lists the keywords that should trigger its activation. Activate ALL sections whose keywords match the user's prompt. A single prompt can activate multiple LoRA sections.
+Before writing the prompt, infer from the described scenario which LoRAs are loaded. Match on what the scene actually depicts, not on literal keywords - users phrase the same scene many ways. Activate ALL sections whose scenario the user's prompt depicts, even when none of the listed keywords appear verbatim. If you can see the reference image(s), use what is visible to disambiguate the described scenario. If no section's scenario matches the described action, activate none - do not force a trigger onto a scene it does not cover. A single prompt can activate multiple sections.
 
 ### ALWAYS ACTIVE (Base Prompting)
 The core rules above apply to every prompt regardless of content.

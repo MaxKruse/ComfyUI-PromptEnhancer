@@ -421,3 +421,22 @@ def test_chat_completion_reports_context_overflow(monkeypatch, capsys):
     assert result is None
     out = capsys.readouterr().out
     assert "OUT OF CONTEXT" in out
+
+
+def test_vision_context_note_with_images():
+    """When reference images are visible, the system prompt must say so."""
+    import llm_client
+
+    note = llm_client._vision_context_note(["jpeg-b64"])
+    assert "can see the reference image" in note
+    assert "<Picture 1>" in note
+    assert "never invent" in note
+
+
+def test_vision_context_note_without_images():
+    """A blind run must be told not to assume frame details."""
+    import llm_client
+
+    note = llm_client._vision_context_note(None)
+    assert "No reference image is available" in note
+    assert "anchor using only what the user" in note

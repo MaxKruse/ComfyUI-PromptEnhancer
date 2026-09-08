@@ -121,7 +121,20 @@ LoRAs not listed above (e.g. `gemma-3-12b-it-abliterated`, `ltx-2.3-22b-distille
 
 ### Supported LoRAs (LTX 2.5 I2V)
 
-No routing guide is embedded - the LTX 2.5 LoRA ecosystem is still young and no standard NSFW LoRA suite has been established (the 2.3 Sulphur/10Eros LoRAs do not port). Character and style LoRAs tagged LTXV 2.5 load as usual, e.g. the [LTX-2.5 3D Animation Style](https://civitai.com/models/2895989) LoRA (trigger `3dsrx`, strength around 0.4 for I2V).
+The LTX 2.5 preset includes an intelligent LoRA routing guide. The LLM analyzes your prompt and activates the relevant LoRA sections based on keyword matching. Multiple LoRAs can activate from a single prompt. The LoRAs live in the `models/loras/ltx2.5` folder; several of them were trained on LTX 2.3, but LTX 2.5 shares the same transformer, so they load and work without changes.
+
+| LoRA File | Activates on | Purpose |
+|-----------|-------------|---------|
+| `DR34ML4Y_LT3X_V3` | blowjob, double blowjob, missionary, cowgirl, reverse cowgirl, riding, doggy, from behind | All-in-one position LoRA. Leet trigger opens the prompt: `bl0wj0b`, `d0ubl3_bj`, `m15510n4ry`, `c0wg1rl`, `d0gg1e`. |
+| `CUMOUF_oral_creampie_v1` | oral creampie, CIM, cum in her mouth, finishes in her mouth | Oral creampie finish with visible repeated ejaculatory spasms (not the money shot). Has audio training; trigger `CUMOUF` (all caps, first word). |
+| `DaSiWa_LTX23_NSFW_Bodyphysics_Fluid_Motion_Enhancer_v01` | jiggle, bounce, body physics, fluid motion, snappy movement | Triggerless physics enhancer: springier, faster body motion and jiggle. Strength 0.5-1.0; can exaggerate. |
+| `2ltsway-breastsway` | breast sway, breast shake, swaying breasts | Deliberate side-to-side breast sway on demand. Triggerless - describe the motion. Intensity scales with steps (8 minimum, 30 strongest); if the face blurs, lower strength or reseed. |
+| `LTX2.3_BacklitSilhouette_V1.0` | lighting change, backlit, silhouette, rim light reveal | Sudden dramatic lighting change to a colored backlit silhouette ("the lighting suddenly changes to a red backlit silhouette"); events after go after the phrase "after the lighting change." |
+
+Notes:
+- **DR34ML4Y** was trained for a different engine family; the triggers still work, but the surrounding prose must be more verbose and literal than the base 2.5 style. It performs best without distillation - distilled checkpoints fight the NSFW training (body horror). If you must distill, keep distill strength 0.25-0.35.
+- Missionary and cowgirl can mix up unless the prompt states it explicitly: woman on her back (missionary) or straddling him (cowgirl).
+- Character and style LoRAs tagged LTXV 2.5 load as usual, e.g. the [LTX-2.5 3D Animation Style](https://civitai.com/models/2895989) LoRA (trigger `3dsrx`, strength around 0.4 for I2V).
 
 ### Supported LoRAs (MiniMax H3)
 
@@ -221,7 +234,7 @@ The preset handles both SFW and NSFW content automatically based on your prompt.
 
 The reference image(s) let the LLM see the source frame(s) and describe motion relative to what's already visible. Multiple reference images can be connected via Autogrow slots. The preset handles both SFW and NSFW content automatically.
 
-The `LTX 2.5 - i2v` preset uses the same wiring - just pick it in the preset dropdown. It prompts the delta only (what happens next from the first frame) plus native synchronized audio, and it embeds no LoRA routing guide (see above).
+The `LTX 2.5 - i2v` preset uses the same wiring - just pick it in the preset dropdown. It prompts the delta only (what happens next from the first frame) plus native synchronized audio, and it embeds its own LoRA routing guide (see above).
 
 ### MiniMax H3 Text-to-Video (T2V)
 

@@ -99,6 +99,30 @@ def test_ltx2_5_i2v_preset_has_nsfw_directives():
     assert "anatomical" in content.lower()
 
 
+def test_ltx2_5_i2v_preset_has_lora_routing_guide():
+    """LTX 2.5 preset should route the local NSFW LoRA set by filename and trigger."""
+    content = load_preset("ltx2.5-i2v")
+    assert content is not None
+    assert "LORA ROUTING GUIDE" in content
+    # Every LoRA in models/loras/ltx2.5 is routed by its exact filename
+    for lora in (
+        "DR34ML4Y_LT3X_V3",
+        "CUMOUF_oral_creampie_v1",
+        "DaSiWa_LTX23_NSFW_Bodyphysics_Fluid_Motion_Enhancer_v01",
+        "2ltsway-breastsway",
+        "LTX2.3_BacklitSilhouette_V1.0",
+    ):
+        assert lora in content, f"no routing section for {lora}"
+    lowered = content.lower()
+    # DR34ML4Y leet position triggers
+    for trigger in ("bl0wj0b", "d0ubl3_bj", "m15510n4ry", "c0wg1rl", "d0gg1e"):
+        assert trigger in lowered, f"no trigger {trigger}"
+    # Backlit silhouette effect phrase
+    assert "backlit silhouette" in lowered
+    # DaSiWa is a triggerless enhancer with a strength range
+    assert "0.5" in content
+
+
 def test_no_separate_nsfw_presets():
     """NSFW presets should be merged into main presets, not separate files."""
     assert load_preset("krea2-t2i-nsfw") is None

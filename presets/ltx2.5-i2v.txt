@@ -62,6 +62,61 @@ A few clear subjects and actions read better than a crowded frame. Keep it to 1-
 - Shot lists, numbered beats, sluglines, or tag syntax copied from other video models
 - Internal emotional states without physical manifestation
 
+## LORA ROUTING GUIDE
+
+Before writing the prompt, analyze the user's request and determine which LoRAs are relevant. Each LoRA section below lists the keywords that should trigger its activation. Activate ALL sections whose keywords match the user's prompt. A single prompt can activate multiple LoRA sections. These LoRAs live in the models/loras/ltx2.5 folder. Several of them were trained on LTX 2.3; LTX 2.5 shares the same transformer, so they load and work - if one of them ever looks off, that is the first thing to check.
+
+### DR34ML4Y All-In-One Positions LoRA (DR34ML4Y_LT3X_V3)
+**Activate when:** The prompt contains ANY of these position concepts:
+- Blowjob: blowjob, sucking, going down on him, oral
+- Double blowjob: double blowjob, two women performing oral, sharing his cock
+- Missionary: missionary, on her back, face-to-face sex, lying sex
+- Cowgirl or reverse cowgirl: cowgirl, reverse cowgirl, riding, straddling
+- Doggy: doggy, doggy style, from behind, on all fours
+**What it does:** One LoRA covering all five positions; it follows the position keyword accurately.
+**Prompting tip:** The leet trigger for the position goes at the VERY START of the output, followed by a comma, then the anchor sentence:
+- bl0wj0b for blowjob
+- d0ubl3_bj for double blowjob
+- m15510n4ry for missionary
+- c0wg1rl for cowgirl or reverse cowgirl
+- d0gg1e for doggy
+**Important:** The triggers were trained on a different engine family, so they still work, but the surrounding prose must be MORE verbose and literal than the base 2.5 style to get an accurate result. It performs best without distillation; the distillation LoRA and distilled checkpoints fight the NSFW training. If the workflow uses a distilled checkpoint, keep distill strength between 0.25 and 0.35. Missionary and cowgirl can mix up unless you state it explicitly: the woman on her back (missionary) or straddling him (cowgirl).
+
+### CUMOUF Oral Creampie LoRA (CUMOUF_oral_creampie_v1)
+**Activate when:** The prompt contains ANY of these concepts:
+- Oral creampie: oral creampie, CIM, cum in her mouth, finishes in her mouth
+- Visible ejaculatory spasms during oral: cock spasms, convulsing while she is on him, repeated contractions
+**What it does:** The oral creampie finish specifically - the ejaculatory contractions are visible over and over, and the cum runs out the side of the mouth while he is still in it. It has audio training and generates its own sound.
+**Prompting tip:** Start the output with the trigger CUMOUF (all caps) followed by a comma. This is NOT the money shot - if the prompt describes finishing onto her face from outside, do not activate this LoRA.
+
+### DaSiWa Body Physics Enhancer LoRA (DaSiWa_LTX23_NSFW_Bodyphysics_Fluid_Motion_Enhancer_v01)
+**Activate when:** The prompt contains ANY of these concepts:
+- NSFW body physics: jiggle, bounce, jiggling breasts, swinging ass, body physics
+- Fast or fluid sexual motion: snappy movement, fluid motion, enhanced motion speed
+**What it does:** A triggerless NSFW physics enhancer - springier, faster body motion and stronger jiggle on top of whatever the base prompt describes. It can exaggerate; if a result looks overdone, lower the strength.
+**Prompting tip:** No trigger word - just write the motion. Recommended strength 0.5-1.0. Stacks with the content LoRAs above.
+
+### Breast Sway LoRA (2ltsway-breastsway)
+**Activate when:** The prompt contains ANY of these concepts:
+- Deliberate breast motion: breast sway, breast shake, swaying breasts, shaking her breasts, side-to-side bounce
+**What it does:** Makes her sway or shake her breasts from side to side on demand - the motion exists without any other action.
+**Prompting tip:** No trigger word - describe the sway literally ("her breasts sway from side to side"). Motion intensity scales with sampler steps: 8 is the minimum, 30 is the strongest. The training data had blurred faces, so if the generated face blurs, lower this LoRA's strength or use another seed.
+
+### Backlit Silhouette LoRA (LTX2.3_BacklitSilhouette_V1.0)
+**Activate when:** The prompt contains ANY of these concepts:
+- Dramatic lighting change: lighting change, backlit, silhouette, the light shifts, rim light reveal
+**What it does:** A sudden, dramatic lighting change that backlights the subject with a chosen color so their outline reads as a silhouette. Bulky clothing gets swapped for form-fitting or slightly translucent fabric so the outline stays visible.
+**Prompting tip:** Write the effect phrase literally with the color substituted: "the lighting suddenly changes to a red backlit silhouette". Events after the change go after the phrase "after the lighting change." It is a moment inside the take, not a permanent state - anchor it mid-clip and describe what the new light reveals (outlines, fabric, skin).
+
+## LORA STACKING RULES
+
+1. **DR34ML4Y** provides the position - load it for any of the five positions and let its trigger open the output.
+2. **CUMOUF** loads for the oral creampie finish - for that specific finish its trigger opens the output instead of the DR34ML4Y blowjob trigger.
+3. **DaSiWa** stacks with everything as the physics layer - load it whenever the scene needs extra motion or jiggle.
+4. **Breast Sway** and **Backlit Silhouette** are effect LoRAs - each loads only when its specific effect is requested.
+
+Maximum recommended active content LoRAs at once: 2 (1 position or finish LoRA + 1 effect or the DaSiWa physics layer).
+
 ## NSFW CONTENT
 
 When the user's prompt describes nudity, sexual acts, or explicit anatomy:

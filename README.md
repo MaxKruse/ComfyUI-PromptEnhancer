@@ -32,13 +32,11 @@ Drop this into your `custom_nodes/` directory. No API keys needed - runs entirel
 
 Large reasoning-capable models give the best results. The node defaults are tuned for the first one:
 
-- **Muse-Glimmer 30B uncensored** (Q4_K_M imatrix, ~16 GB) - recommended default. Abliterated fine-tune of Meta's Muse-Glimmer 30B ([base model](https://huggingface.co/TrevorJS/Muse-Glimmer-30B-uncensored), [GGUF](https://huggingface.co/mradermacher/Muse-Glimmer-30B-uncensored-i1-GGUF)). Pair it with the Muse-Glimmer DFlash draft model (`--spec-type draft-dflash`) for speculative decoding - that is the node's built-in default for `extra_flags`.
-- **Gemma 4 31B** (QAT Q4_0, ~17 GB) - excellent prompt following and detail
-- **Gemma 4 26B A4B** (QAT Q4_0, ~15 GB) - MoE with only ~4B active params, so it generates much faster on CPU/hybrid setups while keeping near-31B quality
+- **Muse-Glimmer 30B Uncensored Heretic** (Q4_K_M imatrix, ~16 GB) - recommended default. Heretic uncensored variant of Meta's Muse-Glimmer 30B ([base model](https://huggingface.co/TrevorJS/Muse-Glimmer-30B-uncensored), [GGUF](https://huggingface.co/mradermacher/Muse-Glimmer-30B-Uncensored-Heretic-i1-GGUF)). Pair it with the Muse-Glimmer DFlash draft model (`--spec-type draft-dflash`) for speculative decoding - that is the node's built-in default for `extra_flags`.
+- **Gemma 4 26B A4B** (QAT Q4_0, ~15 GB) - alternative for faster CPU/hybrid setups. MoE with only ~4B active params, so it generates much faster while keeping near-31B quality
 - **Qwen 3.6 35B** (Q4_K_M, ~20 GB) - strong creative expansion and instruction following
-- **Gemma 4 12B** (QAT Q4_0, ~6.6 GB) - good balance of quality and VRAM usage
 
-The reasoning models (Muse-Glimmer, Gemma 4) have reasoning on by default - no extra flags needed. Thinking tokens count against the context window, so keep the Recommended ctx values from the presets table.
+The reasoning models have reasoning on by default - no extra flags needed. Thinking tokens count against the context window, so keep the Recommended ctx values from the presets table.
 
 Any GGUF model works. Smaller models (7B class) are fine for basic prompts but may lack the detail larger models produce.
 
@@ -168,10 +166,10 @@ The node appends a short runtime line to the system prompt stating what the LLM 
 
 Requires:
 
-- A multimodal GGUF model (e.g. `gemma-4-31B-it-QAT`)
+- A multimodal GGUF model
 - The multimodal projector in `extra_flags`:
   ```
-  --mmproj "C:/path/to/mmproj-gemma-4-31B-it-QAT-BF16.gguf"
+  --mmproj "<path/to/mmproj.gguf>"
   ```
 
 ## Extra Flags Reference
@@ -183,25 +181,25 @@ The `extra_flags` input passes arguments directly to `llama-server`. Its built-i
 | `--no-mmap` | Disable memory-mapping the model file. Only use when the model fits in VRAM easily - avoids disk I/O during generation. |
 | `--threads N` | CPU threads for generation. Set to ~75% of physical (performance) cores - not hyperthreaded/logical threads. |
 | `-c N` / `--ctx-size N` | Prompt context window size in tokens. The node default is `20000` (the `ctx_size` input already sets this; only needed here to override). |
-| `--mmproj PATH` | Path to the multimodal projector GGUF file. Required for LTX I2V (reference image input). Optional for KREA 2 T2I - use as a visual hint for the LLM. Must match the base model (e.g. `mmproj-gemma-4-31B-it-*.gguf` for Gemma 4 31B). |
-| `--model-draft PATH` + `--spec-type ...` | Speculative decoding for generation speedup. A draft model pre-generates candidate tokens that the main model accepts or rejects in parallel. Only adds value if your hardware has headroom to run both models. `draft-mtp` uses Multi-Token Prediction (requires an MTP-trained draft model like Unsloth's `gemma-4-31B-it-MTP-BF16.gguf`). `draft-dflash` uses a DFlash draft model (for Muse-Glimmer 30B: the standard, non-abliterated Muse-Glimmer DFlash draft, e.g. `dflash-kquant.gguf`). |
+| `--mmproj PATH` | Path to the multimodal projector GGUF file. Required for LTX I2V (reference image input). Optional for KREA 2 T2I - use as a visual hint for the LLM. Must match the base model. |
+| `--model-draft PATH` + `--spec-type ...` | Speculative decoding for generation speedup. A draft model pre-generates candidate tokens that the main model accepts or rejects in parallel. Only adds value if your hardware has headroom to run both models. `draft-mtp` uses Multi-Token Prediction (requires an MTP-trained draft model). `draft-dflash` uses a DFlash draft model (for Muse-Glimmer 30B: the standard, non-abliterated Muse-Glimmer DFlash draft, e.g. `dflash-kquant.gguf`). |
 | `--spec-draft-n-max N` | Max draft tokens per speculative step with `--spec-type draft-dflash`. `15` works well for Muse-Glimmer. |
 | `--temperature N` / `--top-p N` / `--top-k N` | Sampling parameters. The node's request payload deliberately omits temperature/top-p/top-k (it does send the seed per request), so these server flags set the sampling. The Muse-Glimmer default uses `--top-p 0.95 --top-k 64` with the llama-server default temperature. |
 
 ### Muse Glimmer 30B (recommended default)
 
 ```text
---model-draft "C:\Users\maxkr\LLMs\Muse-Glimmer\dflash-kquant.gguf" \
+--model-draft "<path/to/Muse-Glimmer-dflash-kquant.gguf>" \
   --spec-type draft-dflash --spec-draft-n-max 15 --top-p 0.95 --top-k 64
 ```
 
-This is the node's built-in default for `extra_flags` - the configuration from the working Krea2_ZFilm workflow (Muse-Glimmer 30B uncensored + DFlash draft). Muse-Glimmer is multimodal: to send reference images, add `--mmproj "C:\Users\maxkr\LLMs\Muse-Glimmer\mmproj-Muse-Glimmer-30B-BF16.gguf"` to the same input.
+This is the node's built-in default for `extra_flags` (Muse-Glimmer 30B Heretic + DFlash draft). Muse-Glimmer is multimodal: to send reference images, add `--mmproj "<path/to/mmproj-Muse-Glimmer-30B-BF16.gguf>"` to the same input.
 
 ### KREA 2 T2I (text-only)
 
 ```text
 --no-mmap --threads 12 -c 16000 \
-  --model-draft "C:\Users\maxkr\.lmstudio\models\unsloth\gemma-4-31B-it-GGUF\gemma-4-31B-it-MTP-BF16.gguf" \
+  --model-draft "<path/to/draft-model.gguf>" \
   --spec-type draft-mtp
 ```
 
@@ -211,8 +209,8 @@ No `--mmproj` by default - optional if you want to send a reference image as a v
 
 ```text
 --no-mmap --threads 12 -c 16000 \
-  --mmproj "C:\Users\maxkr\.lmstudio\models\lmstudio-community\gemma-4-31B-it-QAT-GGUF\mmproj-gemma-4-31B-it-NVFP4-turbo-bf16.gguf" \
-  --model-draft "C:\Users\maxkr\.lmstudio\models\unsloth\gemma-4-31B-it-GGUF\gemma-4-31B-it-MTP-BF16.gguf" \
+  --mmproj "<path/to/mmproj.gguf>" \
+  --model-draft "<path/to/draft-model.gguf>" \
   --spec-type draft-mtp
 ```
 

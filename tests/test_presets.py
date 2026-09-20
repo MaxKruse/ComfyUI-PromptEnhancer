@@ -196,12 +196,83 @@ def test_minimax_presets_have_correct_target():
         assert p.target_model == "minimax-h3"
 
 
+def test_qwenimage2_1_t2i_preset_exists():
+    """Qwen-Image 2.1 text-to-image preset should exist."""
+    content = load_preset("qwenimage2.1-t2i")
+    assert content is not None
+    assert "image prompt rewriting expert" in content.lower()
+
+
+def test_qwenimage2_1_t2i_preset_has_key_content():
+    """Qwen-Image 2.1 T2I preset should contain the eight-step observer-description contract."""
+    content = load_preset("qwenimage2.1-t2i")
+    lowered = content.lower()
+    assert "eight steps" in lowered
+    assert "opening sentence" in lowered
+    assert "positional" in lowered
+    assert "lighting" in lowered
+    assert "anatomical" in lowered
+
+
+def test_qwenimage2_1_t2i_preset_plain_text_output():
+    """Qwen-Image 2.1 T2I preset must output plain text without the JSON ratio field."""
+    content = load_preset("qwenimage2.1-t2i")
+    lowered = content.lower()
+    assert "plain text" in lowered
+    assert "wh_ratio" not in lowered
+    assert "json" not in lowered
+
+
+def test_qwenimage2_1_i2i_preset_exists():
+    """Qwen-Image 2.1 image-editing preset should exist."""
+    content = load_preset("qwenimage2.1-i2i")
+    assert content is not None
+    assert "edit prompt enhancer" in content.lower()
+
+
+def test_qwenimage2_1_i2i_preset_has_key_content():
+    """Qwen-Image 2.1 I2I preset should contain the disentanglement contract and language decisions."""
+    content = load_preset("qwenimage2.1-i2i")
+    lowered = content.lower()
+    assert "attribute disentanglement" in lowered
+    assert "two separate language decisions" in lowered
+    assert "anatomical" in lowered
+
+
+def test_qwenimage2_1_i2i_preset_uses_picture_tags():
+    """Qwen-Image 2.1 I2I preset must reference inputs via the node's <Picture N> vocabulary."""
+    content = load_preset("qwenimage2.1-i2i")
+    assert "<Picture 1>" in content
+    assert "<Picture 2>" in content
+    assert "<image1>" not in content
+
+
+def test_qwenimage2_1_i2i_preset_plain_text_output():
+    """Qwen-Image 2.1 I2I preset must output plain text without the JSON ratio fields."""
+    content = load_preset("qwenimage2.1-i2i")
+    lowered = content.lower()
+    assert "plain text" in lowered
+    assert "wh_ratio" not in lowered
+    assert "ratio_follow" not in lowered
+
+
+def test_qwenimage2_1_presets_have_correct_target():
+    """Qwen-Image 2.1 presets should derive target_model=qwenimage2.1."""
+    presets = list_presets()
+    qwen_presets = [p for p in presets if p.key.startswith("qwenimage2.1")]
+    assert len(qwen_presets) > 0
+    for p in qwen_presets:
+        assert p.target_model == "qwenimage2.1"
+        assert p.display_name.startswith("Qwen-Image 2.1")
+
+
 def test_target_model_labels_complete():
     """Target model labels should cover all supported models."""
     assert "krea2-t2i" in TARGET_MODEL_LABELS
     assert "ltx2.3-10eros-i2v" in TARGET_MODEL_LABELS
     assert "ltx2.5" in TARGET_MODEL_LABELS
     assert "minimax-h3" in TARGET_MODEL_LABELS
+    assert "qwenimage2.1" in TARGET_MODEL_LABELS
 
 
 def test_list_presets_returns_named_tuples():

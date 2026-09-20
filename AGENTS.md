@@ -40,7 +40,7 @@ Key architectural properties:
 | `nodes.py` | The one node class + schema, node registration, path/preset helpers |
 | `llm_client.py` | Entire llama-server lifecycle + HTTP client + quality gate (public entry: `enhance_prompt()`) |
 | `presets.py` | Preset discovery API: `list_presets`, `load_preset`, `get_default_preset`, `get_preset_by_key`, `TARGET_MODEL_LABELS` |
-| `presets/` | System-prompt `.txt` files - **the extension point**. Naming: `<target>-<name>.txt` (e.g. `krea2-t2i-portrait.txt`); target prefix drives the dropdown label. Bundled: `krea2-t2i`, `ltx2.3-10eros-i2v`, `minimax-h3-base`, `minimax-h3-r2v` |
+| `presets/` | System-prompt `.txt` files - **the extension point**. Naming: `<target>-<name>.txt` (e.g. `krea2-t2i-portrait.txt`); target prefix drives the dropdown label. Bundled: `krea2-t2i`, `ltx2.3-10eros-i2v`, `ltx2.5-i2v`, `minimax-h3-base`, `minimax-h3-r2v`, `qwenimage2.1-t2i`, `qwenimage2.1-i2i` |
 | `tests/` | One pytest module per source module (`test_nodes`, `test_llm_client`, `test_presets`) + `conftest.py` |
 
 ## Development Commands
@@ -52,7 +52,7 @@ There is no build step. The node is imported by ComfyUI from `custom_nodes/`.
 cd ComfyUI/custom_nodes
 git clone https://github.com/MaxKruse/ComfyUI-PromptEnhancer.git
 
-# Tests (run from the repo root; verified: 62 passed)
+# Tests (run from the repo root; verified: 77 passed)
 pytest
 pytest tests/test_presets.py   # single module
 ```
@@ -92,6 +92,6 @@ No lint, formatter, type-check, or CI is configured anywhere (no ruff/flake8/myp
 
 - Framework: pytest, plain test functions (no classes/fixtures), one module per source module. Run with `pytest` from the repo root. No coverage tooling, no CI.
 - **Mocking pattern**: fake `comfy`/`comfy.model_management` `types.ModuleType` objects injected into `sys.modules` via monkeypatch (`_install_fake_comfy()` in `tests/test_llm_client.py`) - reuse this pattern when touching `comfy.*` interaction. Server-lifecycle tests use a **real** `subprocess.Popen` (recording wrapper) of a python stand-in process, plus `time.monotonic` timing asserts to catch regression to blocking waits.
-- **Tests pin behavior, not structure**: defaults (`ctx_size` 20000, `min_words` 50, Muse-Glimmer GGUF default, DFlash `extra_server_args` flags), input ordering (`prompt` first for bypass), negative assertions (absent legacy inputs like `target_model`/`reference_image`, generic non-LTX names), and preset-file **content substrings** (NSFW directives, SNOFS LoRA vocabulary, the "photograph not photorealistic" rule, MiniMax section names). Changing a preset's wording or a node default breaks tests by design - update the test or restore the contract deliberately. The seed wiring is also pinned: `chat_completion` must send `seed` in the payload, the retry loop must increment it per attempt, and `build_command` must not emit a CLI `--seed`. Quality-gate pins: a faithful expansion that preserves every original word must pass, near-verbatim echoes must fail, refusals must be excluded from the retry fallback, each reference image part must be preceded by a `<Picture N>` label, and `timings`/context-overflow responses must print to the console.
+- **Tests pin behavior, not structure**: defaults (`ctx_size` 20000, `min_words` 50, Muse-Glimmer GGUF default, DFlash `extra_server_args` flags), input ordering (`prompt` first for bypass), negative assertions (absent legacy inputs like `target_model`/`reference_image`, generic non-LTX names), and preset-file **content substrings** (NSFW directives, SNOFS LoRA vocabulary, the "photograph not photorealistic" rule, MiniMax section names, Qwen-Image 2.1 plain-text/no-JSON output and its `<Picture N>` tags). Changing a preset's wording or a node default breaks tests by design - update the test or restore the contract deliberately. The seed wiring is also pinned: `chat_completion` must send `seed` in the payload, the retry loop must increment it per attempt, and `build_command` must not emit a CLI `--seed`. Quality-gate pins: a faithful expansion that preserves every original word must pass, near-verbatim echoes must fail, refusals must be excluded from the retry fallback, each reference image part must be preceded by a `<Picture N>` label, and `timings`/context-overflow responses must print to the console.
 - Preset content tests break on rewording of `presets/*.txt`; discovery-driven loops (`test_all_presets_load_without_error`, unique keys/display names) automatically cover new preset files.
 - Timing-sensitive tests exist (`<1.5 s`/`<2.5 s` asserts on real process spawn/kill) - expect occasional slowness, not failure.

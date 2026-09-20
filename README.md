@@ -86,8 +86,10 @@ Prompt enhancement with retry loop.
 | `LTX 2.5 - i2v` | LTX 2.5 Image-to-Video | Single continuous take from the given first frame - the image carries all static detail, the prompt commands only motion, camera, and native synchronized audio (delta prompting). Physical emotion cues, pacing beats for auto-duration, direct anatomical NSFW directives. Based on the [official LTX-2.5 prompting guide](https://docs.ltx.io/api-documentation/implementation-guides/prompting-guide) and [community research](https://civitai.com/models/2318870). | 8192 |
 | `MiniMax H3 - base` | MiniMax H3 Text/Image-to-Video | Three-section prompts (`integrated_multimodal_description`, `overall_soundscape`, `non_diegetic_music`) with shot-by-shot camera, audio, and dialogue. Auto-detects T2VA (no images) vs I2VA (reference image(s) as first frame). Based on the [official MiniMax H3 Video Prompt Writing Guide](https://huggingface.co/MiniMaxAI/MiniMax-H3/resolve/main/docs/VIDEO_PROMPT_WRITING_GUIDE_base_en.md). Handles both SFW and NSFW content. | 20000 |
 | `MiniMax H3 - r2v` | MiniMax H3 Reference-to-Video | Structured full-reference rewrite outputs for R2V. Based on the [official MiniMax H3 Full-Reference Mode guide](https://platform.minimaxi.com/document/minimax-h3-full-reference-mode-guide). Handles both SFW and NSFW content. | 20000 |
+| `Qwen-Image 2.1 - t2i` | Qwen-Image 2.1 Text-to-Image | Eight-step "observer" expansion: any brief (any language) becomes a 400-500 word English description of the finished image - opening medium/style/orientation sentence, positional inventory, literal quoted text, dedicated lighting sentence, single composition closer. Plain-text output; the aspect ratio stays a working decision, never written into the prompt. Based on the [official Qwen-Image 2.1 prompt rewriter](https://github.com/QwenLM/Qwen-Image-2.1/tree/main/prompt_rewrite). Handles both SFW and NSFW content. | 4096 |
+| `Qwen-Image 2.1 - i2i` | Qwen-Image 2.1 Image Editing (I2I) | Rewrites vague edit instructions into precise, actionable editing directives anchored on the input image(s) - `<Picture N>` tags for multi-image input, each image's role (canvas vs. material source) stated, full attribute disentanglement (edit exactly the named attributes, hold everything else at input fidelity), dual Chinese/English prose + rendered-text language rules. Based on the [official Qwen-Image 2.1 prompt rewriter](https://github.com/QwenLM/Qwen-Image-2.1/tree/main/prompt_rewrite). Handles both SFW and NSFW content. | 8192 |
 
-Recommended context size for `llama-server -c` (the node defaults to 20000). Each request fits in: system prompt + user prompt + reference images (via mmproj, roughly 0.5-2k tokens per image) + the expanded output. Budgets: KREA 2 T2I is text-only (about 1.2k system + about 0.5k output = under 2k, so 4096 leaves 2x headroom); LTX 2.3/2.5 I2V adds 1-2 reference images (about 4-7k total); MiniMax H3 base can output uncapped, dialogue-dense descriptions (about 8k with a first-frame image); MiniMax H3 r2v takes several reference images plus a 350-500 word output (about 7-9k). Reference images dominate the budget: every connected image adds roughly 0.5-2k tokens, so a multi-image job scales up fast - that is why the MiniMax H3 presets recommend 20000. Lowering `-c` for text-only work saves KV-cache RAM; if you run a reasoning model with thinking enabled, keep the preset's recommended value (20000 for MiniMax H3) so the thinking budget does not starve the output.
+Recommended context size for `llama-server -c` (the node defaults to 20000). Each request fits in: system prompt + user prompt + reference images (via mmproj, roughly 0.5-2k tokens per image) + the expanded output. Budgets: KREA 2 T2I is text-only (about 1.2k system + about 0.5k output = under 2k, so 4096 leaves 2x headroom); LTX 2.3/2.5 I2V adds 1-2 reference images (about 4-7k total); MiniMax H3 base can output uncapped, dialogue-dense descriptions (about 8k with a first-frame image); MiniMax H3 r2v takes several reference images plus a 350-500 word output (about 7-9k); Qwen-Image 2.1 t2i is text-only (about 1.7k system + about 0.7k output, so 4096 leaves headroom); Qwen-Image 2.1 i2i adds 1-N reference images (about 4-7k with 1-2 images, more for multi-image composites). Reference images dominate the budget: every connected image adds roughly 0.5-2k tokens, so a multi-image job scales up fast - that is why the MiniMax H3 presets recommend 20000. Lowering `-c` for text-only work saves KV-cache RAM; if you run a reasoning model with thinking enabled, keep the preset's recommended value (20000 for MiniMax H3) so the thinking budget does not starve the output.
 
 Each preset contains both general and NSFW-specific directives. The LLM detects the content type from your prompt and applies the appropriate rules automatically - no need to switch presets.
 
@@ -262,6 +264,23 @@ With reference image(s) connected, the preset adds the I2VA instruction prefix (
 ```
 
 The preset outputs structured full-reference rewrite sections (`subject_definitions`, `summary`, `retention_analysis`, `detailed_description`, `overall_soundscape`, `non_diegetic_music`). Reference labels (`<Subject N>`, `<Picture N>`, `<Audio N>`) track identity across all sections. Handles both SFW and NSFW content automatically.
+
+### Qwen-Image 2.1 Text-to-Image
+
+```
+[CLIP Text Encode] -> [Prompt Enhancer (preset: Qwen-Image 2.1 - t2i)] -> [Qwen-Image 2.1 Sampler]
+```
+
+The preset expands any brief into a 400-500 word English "observer" description of the finished image: the opening sentence names medium, style and orientation, positional phrases locate every element, quoted text is rendered literally in its own script, lighting gets its own sentence, and one composition sentence closes the frame. The output is plain text - the preset's aspect-ratio decision only shapes the orientation wording, so set your canvas width/height to match. Handles both SFW and NSFW content automatically.
+
+### Qwen-Image 2.1 Image Editing (I2I)
+
+```
+[Load Image] -> [Prompt Enhancer (preset: Qwen-Image 2.1 - i2i, ref_image_0 connected)]
+                    -> [PreviewAny] -> [CLIP Text Encode] -> [Qwen-Image 2.1 Sampler]
+```
+
+With reference image(s) connected, the preset rewrites the edit instruction into a precise editing directive anchored on what the image(s) actually show. Multi-image input uses `<Picture N>` tags and states each image's role (canvas vs. material source). Only the attributes the user named are edited; everything else is held at input fidelity. Handles both SFW and NSFW content automatically.
 
 ## VRAM Management
 

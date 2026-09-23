@@ -6,6 +6,7 @@ Presets are organized by target model prefix:
   - ltx2.5-i2v : LTX 2.5 image-to-video preset (general + NSFW auto-detect)
   - minimax-h3-base : MiniMax H3 Text-to-Video + Image-to-Video (T2V/I2V) preset (general + NSFW auto-detect)
   - minimax-h3-r2v : MiniMax H3 Reference-to-Video (R2V) preset (general + NSFW auto-detect)
+  - minimax-h3-eros-max-r2v : MiniMax H3 Eros Max beta5 Reference-to-Video (hybrid ref/t2va) preset, NSFW focus (general + NSFW auto-detect)
   - qwenimage2.1-t2i : Qwen-Image 2.1 text-to-image observer-description preset (general + NSFW auto-detect)
   - qwenimage2.1-i2i : Qwen-Image 2.1 image-editing (i2i) preset (general + NSFW auto-detect)
 

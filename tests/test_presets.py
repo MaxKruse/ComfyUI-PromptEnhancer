@@ -187,6 +187,47 @@ def test_minimax_h3_base_preset_has_lora_directives():
         assert term in content.lower()
 
 
+def test_minimax_h3_eros_max_r2v_preset_exists():
+    """MiniMax H3 Eros Max R2V preset should exist."""
+    content = load_preset("minimax-h3-eros-max-r2v")
+    assert content is not None
+    assert len(content) > 100
+    assert "video" in content.lower()
+
+
+def test_minimax_h3_eros_max_r2v_preset_has_key_content():
+    """MiniMax H3 Eros Max R2V preset should contain the six-section contract plus the Eros Max discipline."""
+    content = load_preset("minimax-h3-eros-max-r2v")
+    assert content is not None
+    assert "audio" in content.lower()
+    assert "MM:SS" in content
+    assert "camera" in content.lower()
+    assert "subject_definitions" in content.lower()
+    assert "detailed_description" in content.lower()
+    # The model card's literal-temporal discipline is pinned
+    assert "linear time flow" in content.lower()
+    assert "slang" in content.lower()
+    assert "beta5" in content.lower()
+
+
+def test_minimax_h3_eros_max_r2v_preset_is_hybrid_reference_format():
+    """The preset must enforce reference (ref2va) or t2va prompting and forbid i2v-style prompting."""
+    content = load_preset("minimax-h3-eros-max-r2v")
+    assert content is not None
+    assert "i2v-style" in content.lower()
+    assert "<Subject" in content
+    assert "<Picture" in content
+    assert "<Audio" in content
+
+
+def test_minimax_h3_eros_max_r2v_preset_has_nsfw_focus():
+    """MiniMax H3 Eros Max R2V preset should contain NSFW directives for auto-detection."""
+    content = load_preset("minimax-h3-eros-max-r2v")
+    assert content is not None
+    assert "NSFW" in content
+    assert "anatomical" in content.lower()
+
+
 def test_minimax_presets_have_correct_target():
     """MiniMax H3 presets should derive target_model=minimax-h3."""
     presets = list_presets()

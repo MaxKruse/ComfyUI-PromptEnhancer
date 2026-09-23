@@ -11,6 +11,7 @@ Drop this into your `custom_nodes/` directory. No API keys needed - runs entirel
 - **LTX 2.5 I2V** - image-to-video delta prompting for single continuous takes with native synchronized audio, based on the [official LTX-2.5 prompting guide](https://docs.ltx.io/api-documentation/implementation-guides/prompting-guide) and community research
 - **MiniMax H3 T2V/I2V** - text-to-video and image-to-video prompt generation based on the [official MiniMax H3 Video Prompt Writing Guide](https://huggingface.co/MiniMaxAI/MiniMax-H3/resolve/main/docs/VIDEO_PROMPT_WRITING_GUIDE_base_en.md)
 - **MiniMax H3 R2V** - reference-to-video structured rewrite outputs based on the [official MiniMax H3 Full-Reference Mode guide](https://platform.minimaxi.com/document/minimax-h3-full-reference-mode-guide)
+- **MiniMax H3 Eros Max R2V** - NSFW-focused reference-to-video rewriting for the [H3 Eros Max beta5](https://civitai.red/models/2851079/h3-eros-max) hybrid ref/t2va checkpoint - literal, temporal, linear-time-flow prompting with explicit anatomical detail
 
 ## Features
 
@@ -86,6 +87,7 @@ Prompt enhancement with retry loop.
 | `LTX 2.5 - i2v` | LTX 2.5 Image-to-Video | Single continuous take from the given first frame - the image carries all static detail, the prompt commands only motion, camera, and native synchronized audio (delta prompting). Physical emotion cues, pacing beats for auto-duration, direct anatomical NSFW directives. Based on the [official LTX-2.5 prompting guide](https://docs.ltx.io/api-documentation/implementation-guides/prompting-guide) and [community research](https://civitai.com/models/2318870). | 8192 |
 | `MiniMax H3 - base` | MiniMax H3 Text/Image-to-Video | Three-section prompts (`integrated_multimodal_description`, `overall_soundscape`, `non_diegetic_music`) with shot-by-shot camera, audio, and dialogue. Auto-detects T2VA (no images) vs I2VA (reference image(s) as first frame). Based on the [official MiniMax H3 Video Prompt Writing Guide](https://huggingface.co/MiniMaxAI/MiniMax-H3/resolve/main/docs/VIDEO_PROMPT_WRITING_GUIDE_base_en.md). Handles both SFW and NSFW content. | 20000 |
 | `MiniMax H3 - r2v` | MiniMax H3 Reference-to-Video | Structured full-reference rewrite outputs for R2V. Based on the [official MiniMax H3 Full-Reference Mode guide](https://platform.minimaxi.com/document/minimax-h3-full-reference-mode-guide). Handles both SFW and NSFW content. | 20000 |
+| `MiniMax H3 - eros-max-r2v` | MiniMax H3 Eros Max Reference-to-Video | NSFW-focused full-reference rewrite outputs for the [H3 Eros Max beta5](https://civitai.red/models/2851079/h3-eros-max) hybrid ref/t2va checkpoint. Same six-section R2V contract as the r2v preset, plus the model card's prompting discipline: literal clean description, temporal sequence on a linear time flow, no slang or euphemisms, longer embellished prompts, and explicit act-by-act NSFW detail. | 20000 |
 | `Qwen-Image 2.1 - t2i` | Qwen-Image 2.1 Text-to-Image | Eight-step "observer" expansion: any brief (any language) becomes a 400-500 word English description of the finished image - opening medium/style/orientation sentence, positional inventory, literal quoted text, dedicated lighting sentence, single composition closer. Plain-text output; the aspect ratio stays a working decision, never written into the prompt. Based on the [official Qwen-Image 2.1 prompt rewriter](https://github.com/QwenLM/Qwen-Image-2.1/tree/main/prompt_rewrite). Handles both SFW and NSFW content. | 4096 |
 | `Qwen-Image 2.1 - i2i` | Qwen-Image 2.1 Image Editing (I2I) | Rewrites vague edit instructions into precise, actionable editing directives anchored on the input image(s) - `<Picture N>` tags for multi-image input, each image's role (canvas vs. material source) stated, full attribute disentanglement (edit exactly the named attributes, hold everything else at input fidelity), dual Chinese/English prose + rendered-text language rules. Based on the [official Qwen-Image 2.1 prompt rewriter](https://github.com/QwenLM/Qwen-Image-2.1/tree/main/prompt_rewrite). Handles both SFW and NSFW content. | 8192 |
 
@@ -264,6 +266,15 @@ With reference image(s) connected, the preset adds the I2VA instruction prefix (
 ```
 
 The preset outputs structured full-reference rewrite sections (`subject_definitions`, `summary`, `retention_analysis`, `detailed_description`, `overall_soundscape`, `non_diegetic_music`). Reference labels (`<Subject N>`, `<Picture N>`, `<Audio N>`) track identity across all sections. Handles both SFW and NSFW content automatically.
+
+### MiniMax H3 Eros Max (R2V)
+
+```
+[Load Image] -> [Prompt Enhancer (preset: MiniMax H3 - eros-max-r2v, ref_image_0 connected)]
+                    -> [PreviewAny] -> [CLIP Text Encode] -> [MiniMax H3 Sampler]
+```
+
+The preset outputs the six full-reference sections in Eros Max's literal-temporal style: every motion, interaction, and sound is stated plainly in the order it happens, each act broken into literal temporal stages. NSFW is the primary focus - direct anatomical terms, explicit fluids and body response, and explicit audio cues paired with the coinciding motion. A single reference image is always treated as reference (ref2va) - never as an i2v first frame; with no images connected, the same six sections are written in pure t2va style.
 
 ### Qwen-Image 2.1 Text-to-Image
 

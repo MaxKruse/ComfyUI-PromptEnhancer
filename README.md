@@ -90,8 +90,9 @@ Prompt enhancement with retry loop.
 | `MiniMax H3 - eros-max-r2v` | MiniMax H3 Eros Max Reference-to-Video | NSFW-focused full-reference rewrite outputs for the [H3 Eros Max beta5](https://civitai.red/models/2851079/h3-eros-max) hybrid ref/t2va checkpoint. Same six-section R2V contract as the r2v preset, plus the model card's prompting discipline: literal clean description, temporal sequence on a linear time flow, no slang or euphemisms, longer embellished prompts, and explicit act-by-act NSFW detail. | 20000 |
 | `Qwen-Image 2.1 - t2i` | Qwen-Image 2.1 Text-to-Image | Eight-step "observer" expansion: any brief (any language) becomes a 400-500 word English description of the finished image - opening medium/style/orientation sentence, positional inventory, literal quoted text, dedicated lighting sentence, single composition closer. Plain-text output; the aspect ratio stays a working decision, never written into the prompt. Based on the [official Qwen-Image 2.1 prompt rewriter](https://github.com/QwenLM/Qwen-Image-2.1/tree/main/prompt_rewrite). Handles both SFW and NSFW content. | 4096 |
 | `Qwen-Image 2.1 - i2i` | Qwen-Image 2.1 Image Editing (I2I) | Rewrites vague edit instructions into precise, actionable editing directives anchored on the input image(s) - `<Picture N>` tags for multi-image input, each image's role (canvas vs. material source) stated, full attribute disentanglement (edit exactly the named attributes, hold everything else at input fidelity), dual Chinese/English prose + rendered-text language rules. Based on the [official Qwen-Image 2.1 prompt rewriter](https://github.com/QwenLM/Qwen-Image-2.1/tree/main/prompt_rewrite). Handles both SFW and NSFW content. | 8192 |
+| `Wan 2.2 - t2v-i2v` | Wan 2.2 Text/Image-to-Video | Auto-detects T2V (no images: complete cinematic scene - completed subject features, at most 4 cinematic aesthetic choices, explicit motion, one primary camera move, 80-120 words) vs I2V (reference image as first frame: delta-only - motion, change, camera behavior in 50-100 words, static content never re-described). Based on the [official Wan 2.2 prompt rewriter](https://github.com/Wan-Video/Wan2.2/blob/main/wan/utils/system_prompt.py) and [community research](https://www.viewcomfy.com/blog/wan2.2_prompt_guide_with_examples). Handles both SFW and NSFW content. | 8192 |
 
-Recommended context size for `llama-server -c` (the node defaults to 20000). Each request fits in: system prompt + user prompt + reference images (via mmproj, roughly 0.5-2k tokens per image) + the expanded output. Budgets: KREA 2 T2I is text-only (about 1.2k system + about 0.5k output = under 2k, so 4096 leaves 2x headroom); LTX 2.3/2.5 I2V adds 1-2 reference images (about 4-7k total); MiniMax H3 base can output uncapped, dialogue-dense descriptions (about 8k with a first-frame image); MiniMax H3 r2v takes several reference images plus a 350-500 word output (about 7-9k); Qwen-Image 2.1 t2i is text-only (about 1.7k system + about 0.7k output, so 4096 leaves headroom); Qwen-Image 2.1 i2i adds 1-N reference images (about 4-7k with 1-2 images, more for multi-image composites). Reference images dominate the budget: every connected image adds roughly 0.5-2k tokens, so a multi-image job scales up fast - that is why the MiniMax H3 presets recommend 20000. Lowering `-c` for text-only work saves KV-cache RAM; if you run a reasoning model with thinking enabled, keep the preset's recommended value (20000 for MiniMax H3) so the thinking budget does not starve the output.
+Recommended context size for `llama-server -c` (the node defaults to 20000). Each request fits in: system prompt + user prompt + reference images (via mmproj, roughly 0.5-2k tokens per image) + the expanded output. Budgets: KREA 2 T2I is text-only (about 1.2k system + about 0.5k output = under 2k, so 4096 leaves 2x headroom); LTX 2.3/2.5 I2V adds 1-2 reference images (about 4-7k total); MiniMax H3 base can output uncapped, dialogue-dense descriptions (about 8k with a first-frame image); MiniMax H3 r2v takes several reference images plus a 350-500 word output (about 7-9k); Qwen-Image 2.1 t2i is text-only (about 1.7k system + about 0.7k output, so 4096 leaves headroom); Qwen-Image 2.1 i2i adds 1-N reference images (about 4-7k with 1-2 images, more for multi-image composites); Wan 2.2 is text-only in T2V mode (about 2k total) and adds 1-2 reference images in I2V mode (about 4-6k), so 8192 leaves headroom. Reference images dominate the budget: every connected image adds roughly 0.5-2k tokens, so a multi-image job scales up fast - that is why the MiniMax H3 presets recommend 20000. Lowering `-c` for text-only work saves KV-cache RAM; if you run a reasoning model with thinking enabled, keep the preset's recommended value (20000 for MiniMax H3) so the thinking budget does not starve the output.
 
 Each preset contains both general and NSFW-specific directives. The LLM detects the content type from your prompt and applies the appropriate rules automatically - no need to switch presets.
 
@@ -292,6 +293,28 @@ The preset expands any brief into a 400-500 word English "observer" description 
 ```
 
 With reference image(s) connected, the preset rewrites the edit instruction into a precise editing directive anchored on what the image(s) actually show. Multi-image input uses `<Picture N>` tags and states each image's role (canvas vs. material source). Only the attributes the user named are edited; everything else is held at input fidelity. Handles both SFW and NSFW content automatically.
+
+### Wan 2.2 Text-to-Video (T2V)
+
+```
+[CLIP Text Encode] -> [Prompt Enhancer (preset: Wan 2.2 - t2v-i2v)] -> [Wan 2.2 T2V Sampler]
+```
+
+With no reference images connected, the preset builds the complete cinematic scene: subject with completed features, at most 4 cinematic aesthetic choices (time of day, light source, shot size, composition), explicit motion with a causal chain, and one primary camera move, in 80-120 words. Handles both SFW and NSFW content automatically.
+
+### Wan 2.2 Image-to-Video (I2V)
+
+```
+[Load Image] -> [Prompt Enhancer (preset: Wan 2.2 - t2v-i2v, ref_image_0 connected)]
+                    -> [PreviewAny] -> [CLIP Text Encode] -> [Wan 2.2 I2V Sampler]
+```
+
+With a reference image connected, the preset prompts the delta only: the first frame carries all static detail, and the prompt commands motion, change, and camera behavior in 50-100 words. Static content already visible in the image is never re-described. Handles both SFW and NSFW content automatically.
+
+Workflow pairing notes (the preset only controls the positive prompt):
+- The A14B MoE checkpoints run as a two-stage workflow: the high-noise expert for the first half of the denoise, the low-noise expert for the second - load the matching high/low-noise pair for any LoRA (NSFW LoRAs ship in that pair, strength around 0.9).
+- Keep NSFW scenes at 480p for stable anatomy; 720p NSFW I2V is still inconsistent.
+- Wan 2.2 enforces negative prompts reliably - keep the default Wan negative prompt for realistic scenes.
 
 ## VRAM Management
 

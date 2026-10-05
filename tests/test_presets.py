@@ -307,6 +307,44 @@ def test_qwenimage2_1_presets_have_correct_target():
         assert p.display_name.startswith("Qwen-Image 2.1")
 
 
+def test_wan2_2_t2v_i2v_preset_exists():
+    """Wan 2.2 text-to-video + image-to-video preset should exist."""
+    info = get_preset_by_key("wan2.2-t2v-i2v")
+    assert info is not None
+    assert info.display_name == "Wan 2.2 - t2v-i2v"
+    assert info.target_model == "wan2.2"
+    content = load_preset("wan2.2-t2v-i2v")
+    assert content is not None
+    assert "video" in content.lower()
+
+
+def test_wan2_2_t2v_i2v_preset_has_key_content():
+    """Wan 2.2 preset should contain the T2V cinematic contract and the I2V delta contract."""
+    content = load_preset("wan2.2-t2v-i2v")
+    assert content is not None
+    lowered = content.lower()
+    # Both modes are handled by one preset, detected from the connected images
+    assert "t2v" in lowered
+    assert "i2v" in lowered
+    assert "mode detection" in lowered
+    # T2V builds the complete scene with a cinematic vocabulary and a length bound
+    assert "shot size" in lowered
+    assert "80-120" in lowered
+    # I2V prompts only the delta from the first frame
+    assert "first frame" in lowered
+    assert "delta" in lowered
+    # Camera movement is a first-class contract
+    assert "camera" in lowered
+
+
+def test_wan2_2_t2v_i2v_preset_has_nsfw_directives():
+    """Wan 2.2 preset should contain NSFW directives for auto-detection."""
+    content = load_preset("wan2.2-t2v-i2v")
+    assert content is not None
+    assert "NSFW" in content
+    assert "anatomical" in content.lower()
+
+
 def test_target_model_labels_complete():
     """Target model labels should cover all supported models."""
     assert "krea2-t2i" in TARGET_MODEL_LABELS
@@ -314,6 +352,7 @@ def test_target_model_labels_complete():
     assert "ltx2.5" in TARGET_MODEL_LABELS
     assert "minimax-h3" in TARGET_MODEL_LABELS
     assert "qwenimage2.1" in TARGET_MODEL_LABELS
+    assert "wan2.2" in TARGET_MODEL_LABELS
 
 
 def test_list_presets_returns_named_tuples():

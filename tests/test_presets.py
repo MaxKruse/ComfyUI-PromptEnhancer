@@ -345,12 +345,70 @@ def test_wan2_2_t2v_i2v_preset_has_nsfw_directives():
     assert "anatomical" in content.lower()
 
 
+def test_moss_image_sft_t2i_preset_exists():
+    """MOSS-Image SFT T2I preset file should exist and load."""
+    content = load_preset("moss-image-sft-t2i")
+    assert content is not None
+    assert len(content) > 100
+    assert "text-to-image" in content.lower()
+
+
+def test_moss_image_sft_t2i_preset_has_key_content():
+    """MOSS-Image SFT T2I preset should contain the key model directives."""
+    content = load_preset("moss-image-sft-t2i")
+    assert content is not None
+    lower = content.lower()
+    # Default output is a natural-language caption written in prose
+    assert "natural-language caption" in lower
+    assert "prose" in lower
+    # Tag order is specified (Quality -> Score -> ... -> General)
+    assert "quality" in lower
+    assert "score" in lower
+    assert "character" in lower
+    assert "general" in lower
+    # Bilingual text rendering with line-break control
+    assert "chinese" in lower
+    assert "line break" in lower
+    # Model specifics
+    assert "qwen3.5 9b" in lower
+    assert "diffusion transformer" in lower
+
+
+def test_moss_image_sft_t2i_preset_plain_text_output():
+    """MOSS-Image SFT T2I preset should default to plain-text caption output."""
+    content = load_preset("moss-image-sft-t2i")
+    assert content is not None
+    lower = content.lower()
+    assert "no markdown" in lower
+    assert "no bullets" in lower
+    # Layout JSON is an opt-in power feature, not the default
+    assert "layout" in lower
+
+
+def test_moss_image_sft_t2i_preset_has_nsfw_directives():
+    """MOSS-Image SFT T2I preset should contain NSFW directives for auto-detection."""
+    content = load_preset("moss-image-sft-t2i")
+    assert content is not None
+    assert "NSFW" in content
+    assert "anatomical" in content.lower()
+
+
+def test_moss_image_sft_t2i_preset_has_correct_target():
+    """moss-image-sft-t2i should derive to the MOSS-Image SFT target."""
+    presets = list_presets()
+    preset = next((c for c in presets if c.key == "moss-image-sft-t2i"), None)
+    assert preset is not None
+    assert preset.target_model == "moss-image-sft"
+    assert preset.display_name.startswith("MOSS-Image SFT")
+
+
 def test_target_model_labels_complete():
     """Target model labels should cover all supported models."""
     assert "krea2-t2i" in TARGET_MODEL_LABELS
     assert "ltx2.3-10eros-i2v" in TARGET_MODEL_LABELS
     assert "ltx2.5" in TARGET_MODEL_LABELS
     assert "minimax-h3" in TARGET_MODEL_LABELS
+    assert "moss-image-sft" in TARGET_MODEL_LABELS
     assert "qwenimage2.1" in TARGET_MODEL_LABELS
     assert "wan2.2" in TARGET_MODEL_LABELS
 

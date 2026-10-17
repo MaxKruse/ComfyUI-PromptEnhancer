@@ -7,6 +7,7 @@ Presets are organized by target model prefix:
   - minimax-h3-base : MiniMax H3 Text-to-Video + Image-to-Video (T2V/I2V) preset (general + NSFW auto-detect)
   - minimax-h3-r2v : MiniMax H3 Reference-to-Video (R2V) preset (general + NSFW auto-detect)
   - minimax-h3-eros-max-r2v : MiniMax H3 Eros Max beta5 Reference-to-Video (hybrid ref/t2va) preset, NSFW focus (general + NSFW auto-detect)
+  - moss-image-sft-t2i : MOSS-Image SFT text-to-image caption preset (general + NSFW auto-detect)
   - qwenimage2.1-t2i : Qwen-Image 2.1 text-to-image observer-description preset (general + NSFW auto-detect)
   - qwenimage2.1-i2i : Qwen-Image 2.1 image-editing (i2i) preset (general + NSFW auto-detect)
   - wan2.2-t2v-i2v : Wan 2.2 Text-to-Video + Image-to-Video (T2V/I2V) preset (general + NSFW auto-detect)
@@ -38,6 +39,7 @@ TARGET_MODEL_LABELS: dict[str, str] = {
     "ltx2.3-10eros-i2v": "LTX 2.3 10Eros I2V",
     "ltx2.5": "LTX 2.5",
     "minimax-h3": "MiniMax H3",
+    "moss-image-sft": "MOSS-Image SFT",
     "qwenimage2.1": "Qwen-Image 2.1",
     "wan2.2": "Wan 2.2",
 }

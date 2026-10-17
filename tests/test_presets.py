@@ -358,7 +358,7 @@ def test_moss_image_sft_t2i_preset_has_key_content():
     content = load_preset("moss-image-sft-t2i")
     assert content is not None
     lower = content.lower()
-    # Default output is a natural-language caption written in prose
+    # Default deliverable is a natural-language caption written in prose
     assert "natural-language caption" in lower
     assert "prose" in lower
     # Tag order is specified (Quality -> Score -> ... -> General)
@@ -372,18 +372,27 @@ def test_moss_image_sft_t2i_preset_has_key_content():
     # Model specifics
     assert "qwen3.5 9b" in lower
     assert "diffusion transformer" in lower
+    # Default output is a structured JSON object (caption form), Layout JSON opt-in
+    assert "json" in lower
+    assert '{"caption"' in content
+    assert "layout" in lower
 
 
-def test_moss_image_sft_t2i_preset_plain_text_output():
-    """MOSS-Image SFT T2I preset should default to plain-text caption output."""
+def test_moss_image_sft_t2i_preset_json_output():
+    """MOSS-Image SFT T2I preset should default to a single-line JSON object output."""
     content = load_preset("moss-image-sft-t2i")
     assert content is not None
     lower = content.lower()
+    # Output is exactly one JSON object - never markdown, bullets, or prose
+    assert "json object" in lower
     assert "no markdown" in lower
     assert "no bullets" in lower
     # Layout JSON is an opt-in power feature, not the default
     assert "layout" in lower
-
+    # The negative prompt stays plain text, not JSON
+    assert "plain comma-separated text" in lower
+    # The legacy plain-text caption format survives as an explicit opt-in
+    assert "plain-text mode" in lower
 
 def test_moss_image_sft_t2i_preset_has_nsfw_directives():
     """MOSS-Image SFT T2I preset should contain NSFW directives for auto-detection."""

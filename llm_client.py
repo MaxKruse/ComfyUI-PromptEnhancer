@@ -22,6 +22,7 @@ import time
 from collections import deque
 from pathlib import Path
 from threading import Lock, Thread
+from typing import NamedTuple
 from urllib import request, error
 
 logger = logging.getLogger(__name__)
@@ -50,6 +51,25 @@ REFUSAL_PATTERNS = (
     "i cannot assist", "i'm unable", "content policy",
     "sexual content", "explicit content is", "i can help with",
     "instead i can", "here's an alternative",
+)
+
+# Generic system prompt for the optional negative-prompt pass. Target-model
+# agnostic: a negative prompt always describes what to AVOID, and the same
+# rules apply to image and video targets alike.
+NEGATIVE_PROMPT_SYSTEM_PROMPT = (
+    "You are an expert at writing negative prompts for AI image and video generation models. "
+    "A negative prompt lists the qualities, artifacts, and elements the model must AVOID in the output. "
+    "The user message contains the user's ORIGINAL prompt, and optionally an ENHANCED version of it for further reference. "
+    "Write a negative prompt based on the original prompt, using the enhanced version (when present) only as additional "
+    "context for the scene's subjects, style, and details: "
+    "- Target the specific subjects, actions, styles, lighting, and framing of the prompts, "
+    "and list their most likely failure modes (distorted anatomy, wrong or inconsistent colors, "
+    "temporal flicker and motion inconsistencies for video, misplaced or duplicated objects, broken perspective). "
+    "- Include general quality negatives: low quality, blurry, overexposed, underexposed, noisy, "
+    "artifacts, watermark, signature, text, logo. "
+    "- Phrase each item as an undesirable trait. Do not repeat the positive prompt's wording verbatim. "
+    "- Output ONLY the negative prompt text itself as comma-separated phrases. "
+    "No explanations, no labels, no markdown, no 'Negative prompt:' prefix."
 )
 
 
@@ -497,6 +517,11 @@ def _run_chat_completion_interruptible(base_url, model_name, system_prompt, user
     return box.get("value")
 
 
+def _resolve_base_seed(seed: int) -> int:
+    """Resolve the base sampling seed: a negative seed means a random 32-bit base."""
+    return (seed if seed >= 0 else random.getrandbits(32)) % 2**32
+
+
 def _run_retry_loop(base_url: str, model_name: str, system_prompt: str, user_prompt: str, images, max_retries: int, min_words: int, seed: int) -> str | None:
     """Run chat completions with retry until quality passes.
 
@@ -508,7 +533,7 @@ def _run_retry_loop(base_url: str, model_name: str, system_prompt: str, user_pro
 
     Raises InterruptProcessingException if ComfyUI requests an interrupt.
     """
-    base_seed = (seed if seed >= 0 else random.getrandbits(32)) % 2**32
+    base_seed = _resolve_base_seed(seed)
     best_result: str | None = None
     for attempt in range(1, max_retries + 1):
         _check_interrupt()
@@ -530,6 +555,41 @@ def _run_retry_loop(base_url: str, model_name: str, system_prompt: str, user_pro
     return best_result
 
 
+class EnhancementResult(NamedTuple):
+    """Result of one enhance_prompt() run: the enhanced positive prompt and, when
+    requested, the derived negative prompt (None when the pass was off or failed)."""
+    positive: str | None
+    negative: str | None
+
+
+def _generate_negative(base_url: str, model_name: str, original_prompt: str, enhanced_prompt: str | None, seed: int) -> str | None:
+    """Single chat completion deriving a negative prompt from the user's original prompt.
+
+    Runs on the still-alive server (no second spawn): same model, fresh context.
+    The original prompt is the basis; *enhanced_prompt* (when available) is
+    included for further reference only. One attempt only - a negative prompt
+    is short and low-risk. Refusals are never returned.
+    """
+    _print_safe("  [PromptEnhancer] Generating negative prompt (same server, fresh context)...")
+    if enhanced_prompt:
+        user_message = (
+            f"Original prompt:\n{original_prompt}\n\n"
+            f"Enhanced prompt (for further reference):\n{enhanced_prompt}"
+        )
+    else:
+        user_message = f"Original prompt:\n{original_prompt}"
+    negative_system_prompt = UNCENSORED_PREFIX + NEGATIVE_PROMPT_SYSTEM_PROMPT
+    result = _run_chat_completion_interruptible(base_url, model_name, negative_system_prompt, user_message, None, seed=seed)
+    if result and not _contains_refusal(result):
+        _print_safe(f"  [PromptEnhancer] ✓ Negative prompt generated ({len(result)} chars)")
+        return result
+    if result:
+        _print_safe("  [PromptEnhancer] ✗ Negative prompt attempt refused - returning empty negative prompt")
+    else:
+        _print_safe("  [PromptEnhancer] ✗ Negative prompt attempt failed - returning empty negative prompt")
+    return None
+
+
 def enhance_prompt(
     server_path: str,
     model_path: str,
@@ -543,15 +603,25 @@ def enhance_prompt(
     max_retries: int = 5,
     min_words: int = 50,
     images = None,
-) -> str | None:
+    generate_negative: bool = False,
+) -> EnhancementResult:
     """Enhance a prompt by spawning a temporary llama-server instance.
 
     *seed* is the base sampling seed, sent per request: attempt N sends
     (base seed + N - 1) mod 2**32. A negative seed resolves to a random
     32-bit base.
 
+    *generate_negative*: when True, a second chat completion runs on the
+    still-alive server (no second model load) deriving a negative prompt from
+    the original user prompt, with the enhanced prompt included for further
+    reference when one was produced, using the generic
+    NEGATIVE_PROMPT_SYSTEM_PROMPT.
+
     Interruptible at any point: checks ComfyUI's interrupt state while the server
     starts up and while generating. Raises InterruptProcessingException on interrupt.
+
+    Returns EnhancementResult(positive, negative); negative is None unless
+    generate_negative is True and the pass produced a clean result.
     """
     if images and not mmproj_path:
         logger.error("[PromptEnhancer] Images provided but mmproj_path is empty. Images will be ignored.")
@@ -585,6 +655,12 @@ def enhance_prompt(
 
     try:
         best_result = _run_retry_loop(base_url, model_name, effective_system_prompt, user_prompt, images, max_retries, min_words, seed)
+        negative_result = None
+        if generate_negative:
+            # Basis: the original prompt, plus the enhanced result for further
+            # reference when one was produced.
+            negative_seed = (_resolve_base_seed(seed) + max_retries) % 2**32
+            negative_result = _generate_negative(base_url, model_name, user_prompt, best_result, seed=negative_seed)
     finally:
         kill_server(server_proc)
 
@@ -598,4 +674,4 @@ def enhance_prompt(
     else:
         logger.error("[PromptEnhancer] All %d attempts failed (%s s total)", max_retries, f"{elapsed:.1f}")
 
-    return best_result
+    return EnhancementResult(best_result, negative_result)

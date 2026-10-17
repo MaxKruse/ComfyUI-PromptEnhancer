@@ -260,3 +260,39 @@ def test_prompt_enhancer_extra_args_default_uses_dflash_draft():
     assert "--spec-draft-n-max 15" in default
     assert "--top-p 0.95" in default
     assert "--top-k 64" in default
+
+
+def test_prompt_enhancer_negative_prompt_toggle_is_last_input():
+    """The generate_negative_prompt toggle is the LAST input, optional, and defaults
+    off, so existing workflows load unchanged with the old behavior."""
+    from nodes import PromptEnhancer
+
+    schema = PromptEnhancer.define_schema()
+    last = schema.inputs[-1]
+    assert last.id == "generate_negative_prompt", (
+        f"generate_negative_prompt should be the last input, got {last.id}"
+    )
+    assert last.optional is True
+    assert last.default is False
+
+
+def test_prompt_enhancer_negative_prompt_toggle_is_boolean():
+    """The toggle must render as a BOOLEAN widget in the legacy input shape."""
+    from nodes import PromptEnhancer
+
+    input_types = _get_input_types(PromptEnhancer)
+    optional = input_types.get("optional", {})
+    assert "generate_negative_prompt" in optional, (
+        f"generate_negative_prompt should be an optional input. Optional keys: {list(optional.keys())}"
+    )
+    assert optional["generate_negative_prompt"][0] == "BOOLEAN"
+    assert optional["generate_negative_prompt"][1].get("default") is False
+
+
+def test_prompt_enhancer_has_negative_prompt_output():
+    """The node exposes a second negative_prompt output after enhanced_prompt,
+    so existing enhanced_prompt connections keep working."""
+    from nodes import PromptEnhancer
+
+    schema = PromptEnhancer.define_schema()
+    assert [o.id for o in schema.outputs] == ["enhanced_prompt", "negative_prompt"]

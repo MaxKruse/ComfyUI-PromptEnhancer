@@ -160,7 +160,8 @@ class PromptEnhancer(ComfyNode):
     2. Spawns llama-server with your GGUF model
     3. Sends your prompt + system preset to the LLM
     4. Retries until a quality prompt is returned
-    5. Kills the server when done
+    5. Optionally derives a negative prompt from the original prompt (same server)
+    6. Kills the server when done
 
     Each execution produces a unique, enhanced prompt.
     When bypassed, the original prompt passes through unchanged.
@@ -286,12 +287,32 @@ class PromptEnhancer(ComfyNode):
                     ),
                     tooltip="Dynamic reference images (0-9). The LLM sees all connected images.",
                 ),
+                io.Boolean.Input(
+                    "generate_negative_prompt",
+                    optional=True,
+                    default=False,
+                    tooltip=(
+                        "Also generate a negative prompt in a second LLM pass. "
+                        "Reuses the same llama-server instance (no extra model load). "
+                        "Based on the original prompt, with the enhanced prompt included for further reference. "
+                        "Result is on the 'negative_prompt' output (empty when off)."
+                    ),
+                ),
             ],
             outputs=[
                 io.String.Output(
                     "enhanced_prompt",
                     display_name="enhanced_prompt",
                     tooltip="The LLM-enhanced prompt text. Passes through original prompt when node is bypassed.",
+                ),
+                io.String.Output(
+                    "negative_prompt",
+                    display_name="negative_prompt",
+                    tooltip=(
+                        "The LLM-generated negative prompt. Based on the original prompt, "
+                        "with the enhanced prompt included for further reference. "
+                        "Empty when generate_negative_prompt is off."
+                    ),
                 ),
             ],
             hidden=[
@@ -313,15 +334,16 @@ class PromptEnhancer(ComfyNode):
         ref_images: dict[str, any] | None = None,
         mmproj_path: str = "",
         extra_server_args: str = DEFAULT_EXTRA_SERVER_ARGS,
+        generate_negative_prompt: bool = False,
         **kwargs,
     ) -> io.NodeOutput:
         if not prompt or not prompt.strip():
-            return io.NodeOutput("")
+            return io.NodeOutput("", "")
 
         # Load preset system prompt
         system_prompt = _resolve_preset_key(preset)
         if not system_prompt:
-            return io.NodeOutput(prompt)
+            return io.NodeOutput(prompt, "")
 
         user_prompt = prompt.strip()
 
@@ -351,9 +373,10 @@ class PromptEnhancer(ComfyNode):
             images=images,
             mmproj_path=mmproj,
             extra_flags=extra_server_args,
+            generate_negative=generate_negative_prompt,
         )
 
-        return io.NodeOutput(result if result else prompt)
+        return io.NodeOutput(result.positive if result.positive else prompt, result.negative or "")
 
 
 # Node registration

@@ -41,7 +41,7 @@ Key architectural properties:
 | `nodes.py` | The one node class + schema, node registration, path/preset helpers |
 | `llm_client.py` | Entire llama-server lifecycle + HTTP client + quality gate (public entry: `enhance_prompt()`) |
 | `presets.py` | Preset discovery API: `list_presets`, `load_preset`, `get_default_preset`, `get_preset_by_key`, `TARGET_MODEL_LABELS` |
-| `presets/` | System-prompt `.txt` files - **the extension point**. Naming: `<target>-<name>.txt` (e.g. `krea2-t2i-portrait.txt`); target prefix drives the dropdown label. Bundled: `krea2-t2i`, `ltx2.3-10eros-i2v`, `ltx2.5-i2v`, `minimax-h3-base`, `minimax-h3-r2v`, `qwenimage2.1-t2i`, `qwenimage2.1-i2i` |
+|`presets/`|System-prompt `.txt` files - **the extension point**. Naming: `<target>-<name>.txt` (e.g. `krea2-t2i-portrait.txt`); target prefix drives the dropdown label. Bundled: `krea2-t2i`, `ltx2.3-10eros-i2v`, `ltx2.5-i2v`, `minimax-h3-base`, `minimax-h3-eros-max-r2v`, `minimax-h3-r2v`, `moss-image-sft-t2i`, `qwenimage2.1-t2i`, `qwenimage2.1-i2i`, `wan2.2-t2v-i2v`|
 | `tests/` | One pytest module per source module (`test_nodes`, `test_llm_client`, `test_presets`) + `conftest.py` |
 
 ## Development Commands

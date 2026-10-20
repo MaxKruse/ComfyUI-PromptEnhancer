@@ -358,41 +358,41 @@ def test_moss_image_sft_t2i_preset_has_key_content():
     content = load_preset("moss-image-sft-t2i")
     assert content is not None
     lower = content.lower()
-    # Default deliverable is a natural-language caption written in prose
+    # Default deliverable is a natural-language caption written as bare prose
     assert "natural-language caption" in lower
-    assert "prose" in lower
+    assert "bare prose" in lower
     # Tag order is specified (Quality -> Score -> ... -> General)
     assert "quality" in lower
     assert "score" in lower
-    assert "character" in lower
-    assert "general" in lower
     # Bilingual text rendering with line-break control
     assert "chinese" in lower
     assert "line break" in lower
     # Model specifics
     assert "qwen3.5 9b" in lower
     assert "diffusion transformer" in lower
-    # Default output is a structured JSON object (caption form), Layout JSON opt-in
+    # Layout JSON is the structured form, using the public bbox conventions
     assert "json" in lower
-    assert '{"caption"' in content
     assert "layout" in lower
+    assert "abs_centralized" in content
+    assert "yxyx" in content
 
 
-def test_moss_image_sft_t2i_preset_json_output():
-    """MOSS-Image SFT T2I preset should default to a single-line JSON object output."""
+def test_moss_image_sft_t2i_preset_output_contract():
+    """MOSS-Image SFT T2I preset should default to bare prose and keep Layout JSON one-line."""
     content = load_preset("moss-image-sft-t2i")
     assert content is not None
     lower = content.lower()
-    # Output is exactly one JSON object - never markdown, bullets, or prose
+    # Default deliverable is a bare-prose caption, never a JSON-wrapped one
+    assert "bare-prose caption" in lower
+    assert '{"caption"' not in content
+    # Layout JSON is one physical line of one JSON object, for placement only
     assert "json object" in lower
+    assert "one physical line" in lower
+    # Output is never markdown or bullets
     assert "no markdown" in lower
     assert "no bullets" in lower
-    # Layout JSON is an opt-in power feature, not the default
-    assert "layout" in lower
     # The negative prompt stays plain text, not JSON
     assert "plain comma-separated text" in lower
-    # The legacy plain-text caption format survives as an explicit opt-in
-    assert "plain-text mode" in lower
 
 def test_moss_image_sft_t2i_preset_has_nsfw_directives():
     """MOSS-Image SFT T2I preset should contain NSFW directives for auto-detection."""

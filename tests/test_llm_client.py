@@ -144,6 +144,7 @@ def test_print_safe_survives_non_utf8_console(monkeypatch):
 def test_start_llama_server_logs_early_crash(monkeypatch, caplog):
     """When llama-server crashes on startup, fail fast and capture its output."""
     import llm_client
+    _install_fake_comfy(monkeypatch)  # keep _check_interrupt away from the real ComfyUI
 
     # Bound the fallback path so the test is fast even if early-exit detection regresses.
     monkeypatch.setattr(llm_client, "_SERVER_STARTUP_TIMEOUT", 3)
@@ -214,36 +215,70 @@ def test_chat_completion_sends_seed_in_payload(monkeypatch):
 
 def test_retry_loop_uses_distinct_seed_per_attempt(monkeypatch):
     """Each retry attempt must use the next seed value, or retries would repeat identical output."""
+    import json
     import llm_client
 
+    _install_fake_comfy(monkeypatch)
+
     seen = []
+    turn = json.dumps({"positive": "too short"})  # fails min_words -> loop retries
 
     def fake_chat(base_url, model_name, system_prompt, user_prompt, images, seed):
         seen.append(seed)
-        return "too short"  # fails min_words -> loop retries
+        return turn
 
     monkeypatch.setattr(llm_client, "_run_chat_completion_interruptible", fake_chat)
     best = llm_client._run_retry_loop("http://127.0.0.1:1", "model", "system", "user", None, max_retries=3, min_words=50, seed=100)
 
     assert seen == [100, 101, 102]
-    assert best == "too short"
+    assert best == turn
 
 
 def test_retry_loop_negative_seed_is_random_32bit_base(monkeypatch):
     """seed=-1 must resolve to a random 32-bit base seed that still increments per attempt."""
+    import json
     import llm_client
+
+    _install_fake_comfy(monkeypatch)
 
     seen = []
 
     def fake_chat(base_url, model_name, system_prompt, user_prompt, images, seed):
         seen.append(seed)
-        return "too short"
+        return json.dumps({"positive": "too short"})
 
     monkeypatch.setattr(llm_client, "_run_chat_completion_interruptible", fake_chat)
     llm_client._run_retry_loop("http://127.0.0.1:1", "model", "system", "user", None, max_retries=2, min_words=50, seed=-1)
 
     assert all(0 <= s < 2**32 for s in seen)
     assert seen[1] == (seen[0] + 1) % 2**32
+
+
+def test_retry_loop_gate_runs_on_parsed_positive(monkeypatch):
+    """The quality gate must run on the extracted "positive" value - not the raw
+    JSON wrapper - and the winning turn is returned raw so the "negative" member
+    survives to the caller."""
+    import json
+    import llm_client
+
+    _install_fake_comfy(monkeypatch)
+
+    good = (
+        "a woman in a red dress walks through a rainy street at night, "
+        "neon signs reflected in the wet asphalt, steam rising from a grate, "
+        "her umbrella tilted against a hard wind, puddles mirroring the city lights, "
+        "cinematic lighting, film grain, shallow depth of field"
+    )
+    turn = json.dumps({"positive": good, "negative": "blurry, extra fingers"})
+
+    monkeypatch.setattr(llm_client, "_run_chat_completion_interruptible", lambda *a, **k: turn)
+    best = llm_client._run_retry_loop(
+        "http://127.0.0.1:1", "model", "system",
+        "a woman in a red dress walks through a rainy street at night",
+        None, max_retries=2, min_words=20, seed=1,
+    )
+
+    assert best == turn
 
 
 def test_build_command_does_not_pass_seed_flag():
@@ -297,11 +332,15 @@ def test_is_good_prompt_rejects_refusal():
 
 
 def test_retry_loop_never_returns_refusal(monkeypatch):
-    """A refusal must never survive as the fallback best result."""
+    """A refusal must never survive as the fallback best result - even when it
+    arrives as the "positive" member of the JSON response."""
+    import json
     import llm_client
 
+    _install_fake_comfy(monkeypatch)
+
     def fake_chat(base_url, model_name, system_prompt, user_prompt, images, seed):
-        return "I cannot help with that request."
+        return json.dumps({"positive": "I cannot help with that request."})
 
     monkeypatch.setattr(llm_client, "_run_chat_completion_interruptible", fake_chat)
     best = llm_client._run_retry_loop("http://127.0.0.1:1", "model", "system", "user", None, 2, 50, 1)
@@ -311,11 +350,14 @@ def test_retry_loop_never_returns_refusal(monkeypatch):
 
 def test_retry_loop_prefers_clean_candidate_over_refusal(monkeypatch):
     """When one attempt is a refusal and another is clean but short, the clean one wins."""
+    import json
     import llm_client
 
+    _install_fake_comfy(monkeypatch)
+
     responses = iter([
-        "I cannot assist with that.",
-        "a clean but short prompt",
+        json.dumps({"positive": "I cannot assist with that."}),
+        json.dumps({"positive": "a clean but short prompt"}),
     ])
 
     def fake_chat(base_url, model_name, system_prompt, user_prompt, images, seed):
@@ -324,7 +366,7 @@ def test_retry_loop_prefers_clean_candidate_over_refusal(monkeypatch):
     monkeypatch.setattr(llm_client, "_run_chat_completion_interruptible", fake_chat)
     best = llm_client._run_retry_loop("http://127.0.0.1:1", "model", "system", "user", None, 2, 50, 1)
 
-    assert best == "a clean but short prompt"
+    assert best == json.dumps({"positive": "a clean but short prompt"})
 
 
 def test_chat_completion_grounds_reference_images_with_labels(monkeypatch):
@@ -442,12 +484,55 @@ def test_vision_context_note_without_images():
     assert "anchor using only what the user" in note
 
 
-def _install_fake_enhance_environment(monkeypatch, positive_result, negative_result=None):
+def test_enhance_json_instruction_off_requests_positive_only():
+    """With the toggle off the instruction must request exactly one key: "positive"
+    - the model is never asked for a negative prompt it was not opted into."""
+    import llm_client
+
+    text = llm_client._enhance_json_instruction(False)
+    assert '"positive"' in text
+    assert '"negative"' not in text
+
+
+def test_enhance_json_instruction_on_requests_both_keys():
+    """With the toggle on the instruction requests both keys and carries the
+    negative-prompt writing rules (failure modes + general quality negatives)."""
+    import llm_client
+
+    text = llm_client._enhance_json_instruction(True)
+    assert '"positive"' in text
+    assert '"negative"' in text
+    assert "failure modes" in text
+    assert "quality negatives" in text
+
+
+def test_parse_enhancement_response_plain_and_fenced_json():
+    """The parser must accept bare JSON and JSON wrapped in markdown code fences."""
+    import json
+    import llm_client
+
+    payload = {"positive": "a detailed prompt", "negative": "blurry, extra fingers"}
+    assert llm_client._parse_enhancement_response(json.dumps(payload)) == ("a detailed prompt", "blurry, extra fingers")
+    fenced = "```json\n" + json.dumps(payload) + "\n```"
+    assert llm_client._parse_enhancement_response(fenced) == ("a detailed prompt", "blurry, extra fingers")
+
+
+def test_parse_enhancement_response_rejects_non_json_and_empty_members():
+    """Non-JSON responses and whitespace/empty members must normalize to None."""
+    import json
+    import llm_client
+
+    assert llm_client._parse_enhancement_response("not json at all") == (None, None)
+    assert llm_client._parse_enhancement_response(None) == (None, None)
+    assert llm_client._parse_enhancement_response(json.dumps({"positive": "   ", "negative": ""})) == (None, None)
+
+
+def _install_fake_enhance_environment(monkeypatch, turn_result):
     """Patch all process/HTTP boundaries of enhance_prompt with a fake server.
 
-    Returns (events, requests): *events* records lifecycle events in the order
-    they happen ("spawn", "positive", "negative", "kill"); *requests* captures
-    {"system", "user", "seed"} for every chat completion the negative pass issues.
+    Returns (events, turns): *events* records lifecycle events in the order
+    they happen ("spawn", "turn", "kill"); *turns* captures {"system", "user"}
+    for the single chat completion the enhance turn issues.
     """
     import llm_client
 
@@ -455,7 +540,7 @@ def _install_fake_enhance_environment(monkeypatch, positive_result, negative_res
     monkeypatch.setattr(llm_client, "free_gpu_memory", lambda: None)
 
     events = []
-    requests = []
+    turns = []
 
     class FakeServerProc:
         pid = 4242
@@ -468,20 +553,15 @@ def _install_fake_enhance_environment(monkeypatch, positive_result, negative_res
         return FakeServerProc(), "http://127.0.0.1:9", 0.0
 
     def fake_retry_loop(base_url, model_name, system_prompt, user_prompt, images, max_retries, min_words, seed):
-        events.append("positive")
-        return positive_result
-
-    def fake_negative_chat(base_url, model_name, system_prompt, user_prompt, images, seed):
-        events.append("negative")
-        requests.append({"system": system_prompt, "user": user_prompt, "seed": seed})
-        return negative_result
+        events.append("turn")
+        turns.append({"system": system_prompt, "user": user_prompt})
+        return turn_result
 
     monkeypatch.setattr(llm_client, "_start_llama_server", fake_start)
     monkeypatch.setattr(llm_client, "discover_model_name", lambda base_url: "fake-model")
     monkeypatch.setattr(llm_client, "_run_retry_loop", fake_retry_loop)
-    monkeypatch.setattr(llm_client, "_run_chat_completion_interruptible", fake_negative_chat)
     monkeypatch.setattr(llm_client, "kill_server", lambda proc: events.append("kill"))
-    return events, requests
+    return events, turns
 
 
 def _call_enhance(**kwargs):
@@ -499,70 +579,78 @@ def _call_enhance(**kwargs):
     return llm_client.enhance_prompt(**params)
 
 
-def test_enhance_prompt_negative_reuses_single_server(monkeypatch):
-    """generate_negative must piggyback on the already-spawned server: exactly
-    one spawn and one kill, with the negative pass between them. The negative
-    request is based on the ORIGINAL prompt, with the enhanced prompt included
-    for further reference, plus the generic negative-prompt system prompt."""
-    import llm_client
+def test_enhance_prompt_negative_single_turn(monkeypatch):
+    """generate_negative=True must NOT add a second request: exactly one turn
+    between one spawn and one kill, the JSON instruction requesting a "negative"
+    key, and both prompts parsed from that same response."""
+    import json
 
-    events, requests = _install_fake_enhance_environment(
-        monkeypatch, "a tall woman in a red coat walking through the rain", "blurry, low quality, extra fingers"
+    events, turns = _install_fake_enhance_environment(
+        monkeypatch,
+        json.dumps({
+            "positive": "a tall woman in a red coat walking through the rain",
+            "negative": "blurry, low quality, extra fingers",
+        }),
     )
     positive, negative = _call_enhance(generate_negative=True)
 
     assert positive == "a tall woman in a red coat walking through the rain"
     assert negative == "blurry, low quality, extra fingers"
-    assert events == ["spawn", "positive", "negative", "kill"]
-    assert len(requests) == 1
-    assert requests[0]["user"].startswith("Original prompt:")
-    assert "a woman in the rain" in requests[0]["user"]
-    assert "a tall woman in a red coat walking through the rain" in requests[0]["user"]
-    assert requests[0]["system"] == llm_client.UNCENSORED_PREFIX + llm_client.NEGATIVE_PROMPT_SYSTEM_PROMPT
+    assert events == ["spawn", "turn", "kill"]
+    assert len(turns) == 1
+    assert '"positive"' in turns[0]["system"]
+    assert '"negative"' in turns[0]["system"]
+    assert turns[0]["user"] == "a woman in the rain"
 
 
 def test_enhance_prompt_negative_off_by_default(monkeypatch):
-    """With the toggle off (default), no second LLM request happens and the
-    negative result is None."""
-    events, requests = _install_fake_enhance_environment(monkeypatch, "enhanced positive prompt")
+    """With the toggle off (default), the turn requests only the "positive" key
+    and any "negative" the model fabricates is discarded."""
+    import json
+
+    events, turns = _install_fake_enhance_environment(
+        monkeypatch,
+        json.dumps({
+            "positive": "enhanced positive prompt",
+            "negative": "blurry",  # fabricated; must be discarded
+        }),
+    )
     positive, negative = _call_enhance()
 
     assert positive == "enhanced positive prompt"
     assert negative is None
-    assert requests == []
-    assert events == ["spawn", "positive", "kill"]
+    assert events == ["spawn", "turn", "kill"]
+    assert len(turns) == 1
+    assert '"positive"' in turns[0]["system"]
+    assert '"negative"' not in turns[0]["system"]
 
 
-def test_enhance_prompt_negative_falls_back_to_original_only(monkeypatch):
-    """When the positive pass fails, the negative pass still runs based on the
-    original prompt alone - no reference to an enhancement that never happened."""
-    events, requests = _install_fake_enhance_environment(monkeypatch, None, "blurry, distorted, artifacts")
+def test_enhance_prompt_failed_turn_yields_both_none(monkeypatch):
+    """When the single turn produces nothing usable, both outputs are None -
+    the node then falls back to the original prompt."""
+    events, turns = _install_fake_enhance_environment(monkeypatch, None)
     positive, negative = _call_enhance(generate_negative=True)
 
     assert positive is None
-    assert negative == "blurry, distorted, artifacts"
-    assert requests[0]["user"].startswith("Original prompt:")
-    assert "a woman in the rain" in requests[0]["user"]
-    assert "Enhanced prompt" not in requests[0]["user"]
-    assert events == ["spawn", "positive", "negative", "kill"]
+    assert negative is None
+    assert events == ["spawn", "turn", "kill"]
+    assert len(turns) == 1
 
 
 def test_enhance_prompt_negative_refusal_returns_none(monkeypatch):
-    """A refusal from the negative pass is discarded, never returned."""
-    events, requests = _install_fake_enhance_environment(
-        monkeypatch, "enhanced positive prompt", "I cannot help with that request."
+    """A refusal in the "negative" member of the single-turn JSON response is
+    discarded - refusals are never returned."""
+    import json
+
+    events, turns = _install_fake_enhance_environment(
+        monkeypatch,
+        json.dumps({
+            "positive": "enhanced positive prompt",
+            "negative": "I cannot help with that request.",
+        }),
     )
     positive, negative = _call_enhance(generate_negative=True)
 
     assert positive == "enhanced positive prompt"
     assert negative is None
-    assert events == ["spawn", "positive", "negative", "kill"]
-
-
-def test_enhance_prompt_negative_seed_continues_sequence(monkeypatch):
-    """The negative pass seed continues the positive attempt sequence
-    (base + max_retries), so it can never collide with a positive attempt seed."""
-    events, requests = _install_fake_enhance_environment(monkeypatch, "enhanced positive prompt", "blurry, low quality")
-    positive, negative = _call_enhance(generate_negative=True, seed=1000, max_retries=5)
-
-    assert requests[0]["seed"] == 1005
+    assert events == ["spawn", "turn", "kill"]

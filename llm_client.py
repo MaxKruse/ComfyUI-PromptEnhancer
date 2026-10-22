@@ -53,24 +53,86 @@ REFUSAL_PATTERNS = (
     "instead i can", "here's an alternative",
 )
 
-# Generic system prompt for the optional negative-prompt pass. Target-model
-# agnostic: a negative prompt always describes what to AVOID, and the same
-# rules apply to image and video targets alike.
-NEGATIVE_PROMPT_SYSTEM_PROMPT = (
-    "You are an expert at writing negative prompts for AI image and video generation models. "
-    "A negative prompt lists the qualities, artifacts, and elements the model must AVOID in the output. "
-    "The user message contains the user's ORIGINAL prompt, and optionally an ENHANCED version of it for further reference. "
-    "Write a negative prompt based on the original prompt, using the enhanced version (when present) only as additional "
-    "context for the scene's subjects, style, and details: "
-    "- Target the specific subjects, actions, styles, lighting, and framing of the prompts, "
-    "and list their most likely failure modes (distorted anatomy, wrong or inconsistent colors, "
-    "temporal flicker and motion inconsistencies for video, misplaced or duplicated objects, broken perspective). "
-    "- Include general quality negatives: low quality, blurry, overexposed, underexposed, noisy, "
-    "artifacts, watermark, signature, text, logo. "
-    "- Phrase each item as an undesirable trait. Do not repeat the positive prompt's wording verbatim. "
-    "- Output ONLY the negative prompt text itself as comma-separated phrases. "
-    "No explanations, no labels, no markdown, no 'Negative prompt:' prefix."
-)
+# The optional negative prompt is generated in the SAME turn as the enhanced
+# prompt (one JSON object per response), so its writing rules ride along in the
+# JSON instruction below instead of in a separate system prompt.
+
+
+def _enhance_json_instruction(generate_negative: bool) -> str:
+    '''Build the single-turn JSON response instruction for the enhance pass.
+
+    The model answers with one JSON object and nothing else, holding the enhanced
+    prompt and - when negative-prompt generation is opted into - the optional
+    negative prompt in the same response. The negative member is only included
+    when generate_negative is True, so the model never fabricates a negative
+    prompt the user did not ask for; its value is an empty string when nothing
+    applies.
+    '''
+    lines = [
+        'Respond with a single JSON object and nothing else, with exactly these keys:',
+        '{',
+    ]
+    if generate_negative:
+        lines.append('  "positive": "<enhanced prompt>",')
+        lines.append('  "negative": "<comma-separated negative prompt>"')
+    else:
+        lines.append('  "positive": "<enhanced prompt>"')
+    lines.append('}')
+    lines.append('- "positive" is the enhanced prompt text itself - plain text, no markdown, no labels, no code fences.')
+    if generate_negative:
+        lines.extend([
+            '- "negative" is a comma-separated list of traits the generation model must AVOID in the output, '
+            'derived from the user prompt, or an empty string when nothing applies.',
+            '- Target the prompt\'s specific subjects, actions, styles, lighting, and framing, and list their '
+            'most likely failure modes (distorted anatomy, wrong or inconsistent colors, temporal flicker and '
+            'motion inconsistencies for video, misplaced or duplicated objects, broken perspective).',
+            '- Include general quality negatives: low quality, blurry, overexposed, underexposed, noisy, '
+            'artifacts, watermark, signature, text, logo.',
+            '- Phrase each item as an undesirable trait; do not repeat the "positive" wording verbatim. '
+            'No explanations, no labels, no markdown, no "Negative prompt:" prefix.',
+        ])
+    return "\n".join(lines) + "\n"
+
+
+def _json_loads_lenient(text: str) -> object | None:
+    '''Parse JSON from a model response, tolerating markdown code fences.'''
+    candidate = text.strip()
+    if candidate.startswith('```'):
+        candidate = candidate.strip('`').strip()
+        if candidate[:4].lower() == 'json':
+            candidate = candidate[4:].strip()
+    try:
+        return json.loads(candidate)
+    except json.JSONDecodeError:
+        start, end = candidate.find('{'), candidate.rfind('}')
+        if start == -1 or end == -1 or end < start:
+            return None
+        try:
+            return json.loads(candidate[start : end + 1])
+        except json.JSONDecodeError:
+            return None
+
+
+def _parse_enhancement_response(result: str | None) -> tuple[str | None, str | None]:
+    '''Split a single-turn JSON enhancement response into (positive, negative).
+
+    The model responds with {"positive": ..., "negative": ...} - the negative member
+    only exists when negative-prompt generation was requested. A refusal in the
+    "negative" member is discarded (refusals are never returned). Returns
+    (None, None) when the response is missing or not valid JSON.
+    '''
+    if not result:
+        return None, None
+    payload = _json_loads_lenient(result)
+    if not isinstance(payload, dict):
+        return None, None
+    positive = payload.get('positive')
+    positive = positive.strip() if isinstance(positive, str) else None
+    negative = payload.get('negative')
+    negative = negative.strip() if isinstance(negative, str) else None
+    if negative and _contains_refusal(negative):
+        negative = None
+    return positive or None, negative or None
 
 
 def _vision_context_note(images) -> str:
@@ -528,8 +590,10 @@ def _run_retry_loop(base_url: str, model_name: str, system_prompt: str, user_pro
     Each attempt sends its own seed (base seed + attempt index) in the request
     payload, so retries genuinely vary instead of repeating the same output.
 
-    Refusal or deflection responses are never returned as the fallback: the
-    longest clean candidate is kept, and None when every attempt refused.
+    The model responds with a single JSON object: {"positive": ..., "negative": ...}.
+    The quality gate runs on the extracted "positive" value; refusals and unparseable
+    responses are never returned as the fallback: the longest clean candidate is kept,
+    and None when every attempt failed.
 
     Raises InterruptProcessingException if ComfyUI requests an interrupt.
     """
@@ -540,8 +604,9 @@ def _run_retry_loop(base_url: str, model_name: str, system_prompt: str, user_pro
         attempt_seed = (base_seed + attempt - 1) % 2**32
         _print_safe(f"  [PromptEnhancer] Attempt {attempt}/{max_retries} (seed {attempt_seed})...")
         result = _run_chat_completion_interruptible(base_url, model_name, system_prompt, user_prompt, images, seed=attempt_seed)
-        if result and is_good_prompt(result, user_prompt, min_words=min_words):
-            _print_safe(f"  [PromptEnhancer] ✓ Accepted on attempt {attempt} ({len(result)} chars)")
+        positive, _negative = _parse_enhancement_response(result)
+        if positive and is_good_prompt(positive, user_prompt, min_words=min_words):
+            _print_safe(f"  [PromptEnhancer] ✓ Accepted on attempt {attempt} ({len(positive)} chars)")
             return result
         elif result:
             if _contains_refusal(result):
@@ -557,37 +622,10 @@ def _run_retry_loop(base_url: str, model_name: str, system_prompt: str, user_pro
 
 class EnhancementResult(NamedTuple):
     """Result of one enhance_prompt() run: the enhanced positive prompt and, when
-    requested, the derived negative prompt (None when the pass was off or failed)."""
+    requested, the negative prompt carried in the same single-turn JSON response
+    (None when the turn failed or the pass was off)."""
     positive: str | None
     negative: str | None
-
-
-def _generate_negative(base_url: str, model_name: str, original_prompt: str, enhanced_prompt: str | None, seed: int) -> str | None:
-    """Single chat completion deriving a negative prompt from the user's original prompt.
-
-    Runs on the still-alive server (no second spawn): same model, fresh context.
-    The original prompt is the basis; *enhanced_prompt* (when available) is
-    included for further reference only. One attempt only - a negative prompt
-    is short and low-risk. Refusals are never returned.
-    """
-    _print_safe("  [PromptEnhancer] Generating negative prompt (same server, fresh context)...")
-    if enhanced_prompt:
-        user_message = (
-            f"Original prompt:\n{original_prompt}\n\n"
-            f"Enhanced prompt (for further reference):\n{enhanced_prompt}"
-        )
-    else:
-        user_message = f"Original prompt:\n{original_prompt}"
-    negative_system_prompt = UNCENSORED_PREFIX + NEGATIVE_PROMPT_SYSTEM_PROMPT
-    result = _run_chat_completion_interruptible(base_url, model_name, negative_system_prompt, user_message, None, seed=seed)
-    if result and not _contains_refusal(result):
-        _print_safe(f"  [PromptEnhancer] ✓ Negative prompt generated ({len(result)} chars)")
-        return result
-    if result:
-        _print_safe("  [PromptEnhancer] ✗ Negative prompt attempt refused - returning empty negative prompt")
-    else:
-        _print_safe("  [PromptEnhancer] ✗ Negative prompt attempt failed - returning empty negative prompt")
-    return None
 
 
 def enhance_prompt(
@@ -611,17 +649,18 @@ def enhance_prompt(
     (base seed + N - 1) mod 2**32. A negative seed resolves to a random
     32-bit base.
 
-    *generate_negative*: when True, a second chat completion runs on the
-    still-alive server (no second model load) deriving a negative prompt from
-    the original user prompt, with the enhanced prompt included for further
-    reference when one was produced, using the generic
-    NEGATIVE_PROMPT_SYSTEM_PROMPT.
+    *generate_negative*: when True, the single-turn JSON response carries a
+    "negative" member next to "positive"; both prompts are derived from the
+    user prompt in one request - no second LLM pass.
 
     Interruptible at any point: checks ComfyUI's interrupt state while the server
     starts up and while generating. Raises InterruptProcessingException on interrupt.
 
     Returns EnhancementResult(positive, negative); negative is None unless
-    generate_negative is True and the pass produced a clean result.
+    generate_negative is True and the turn produced a negative prompt.
+
+    Both prompts arrive in one LLM turn via a JSON response object - see
+    _enhance_json_instruction and _parse_enhancement_response.
     """
     if images and not mmproj_path:
         logger.error("[PromptEnhancer] Images provided but mmproj_path is empty. Images will be ignored.")
@@ -651,27 +690,24 @@ def enhance_prompt(
     _print_safe(f"  [PromptEnhancer] Server ready in {ready_time - start:.1f}s. Model: {model_name}")
 
     # Prepend the uncensored directive; append the runtime note so the LLM knows what it can see
-    effective_system_prompt = UNCENSORED_PREFIX + system_prompt + _vision_context_note(images)
+    effective_system_prompt = UNCENSORED_PREFIX + system_prompt + _enhance_json_instruction(generate_negative) + _vision_context_note(images)
 
     try:
         best_result = _run_retry_loop(base_url, model_name, effective_system_prompt, user_prompt, images, max_retries, min_words, seed)
-        negative_result = None
-        if generate_negative:
-            # Basis: the original prompt, plus the enhanced result for further
-            # reference when one was produced.
-            negative_seed = (_resolve_base_seed(seed) + max_retries) % 2**32
-            negative_result = _generate_negative(base_url, model_name, user_prompt, best_result, seed=negative_seed)
+        positive_result, negative_result = _parse_enhancement_response(best_result)
+        if not generate_negative:
+            negative_result = None
     finally:
         kill_server(server_proc)
 
     elapsed = time.monotonic() - ready_time
 
-    if best_result:
+    if positive_result:
         _print_safe(
-            f"  [PromptEnhancer] Final result ({len(best_result)} chars, {elapsed:.1f}s total): "
-            f"{best_result[:120]}{'...' if len(best_result) > 120 else ''}"
+            f"  [PromptEnhancer] Final result ({len(positive_result)} chars, {elapsed:.1f}s total): "
+            f"{positive_result[:120]}{'...' if len(positive_result) > 120 else ''}"
         )
     else:
         logger.error("[PromptEnhancer] All %d attempts failed (%s s total)", max_retries, f"{elapsed:.1f}")
 
-    return EnhancementResult(best_result, negative_result)
+    return EnhancementResult(positive_result, negative_result)

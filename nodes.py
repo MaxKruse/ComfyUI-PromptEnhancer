@@ -160,7 +160,7 @@ class PromptEnhancer(ComfyNode):
     2. Spawns llama-server with your GGUF model
     3. Sends your prompt + system preset to the LLM
     4. Retries until a quality prompt is returned
-    5. Optionally derives a negative prompt from the original prompt (same server)
+    5. Optionally derives a negative prompt in the same turn (JSON response)
     6. Kills the server when done
 
     Each execution produces a unique, enhanced prompt.
@@ -292,10 +292,10 @@ class PromptEnhancer(ComfyNode):
                     optional=True,
                     default=False,
                     tooltip=(
-                        "Also generate a negative prompt in a second LLM pass. "
-                        "Reuses the same llama-server instance (no extra model load). "
-                        "Based on the original prompt, with the enhanced prompt included for further reference. "
-                        "Result is on the 'negative_prompt' output (empty when off)."
+                        "Also generate a negative prompt, requested in the SAME LLM turn as the "
+                        "enhanced prompt (the model answers with one JSON object holding both). "
+                        "Derived from your prompt; targets its specific failure modes plus general "
+                        "quality negatives. Result is on the 'negative_prompt' output (empty when off)."
                     ),
                 ),
             ],
@@ -309,8 +309,8 @@ class PromptEnhancer(ComfyNode):
                     "negative_prompt",
                     display_name="negative_prompt",
                     tooltip=(
-                        "The LLM-generated negative prompt. Based on the original prompt, "
-                        "with the enhanced prompt included for further reference. "
+                        "The LLM-generated negative prompt, produced in the same turn as the enhanced "
+                        "prompt. Comma-separated traits to avoid, derived from your prompt. "
                         "Empty when generate_negative_prompt is off."
                     ),
                 ),

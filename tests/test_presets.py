@@ -402,6 +402,21 @@ def test_moss_image_sft_t2i_preset_has_nsfw_directives():
     assert "anatomical" in content.lower()
 
 
+def test_moss_image_sft_t2i_preset_has_age_safety_rule():
+    """MOSS-Image SFT T2I preset must make subject age mandatory and keep minors SFW."""
+    content = load_preset("moss-image-sft-t2i")
+    assert content is not None
+    lower = content.lower()
+    # Every subject must carry an explicit age in years
+    assert "explicit age in years" in lower
+    # Under-18 subjects are hard-limited to SFW; 18+ may be NSFW
+    assert "under 18" in lower
+    assert "EXTREMELY SFW" in content
+    assert "18 or older" in lower
+    # Aging a minor up to unlock explicit content is forbidden
+    assert "never age up" in lower
+
+
 def test_moss_image_sft_t2i_preset_has_correct_target():
     """moss-image-sft-t2i should derive to the MOSS-Image SFT target."""
     presets = list_presets()

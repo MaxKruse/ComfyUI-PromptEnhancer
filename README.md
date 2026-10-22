@@ -23,7 +23,7 @@ Drop this into your `custom_nodes/` directory. No API keys needed - runs entirel
 - **Seeded sampling**: The seed is sent to the LLM per request; each retry attempt uses the next seed value, so retries produce genuinely different output
 - **Dynamic reference images**: Connect 0-9 reference images via Autogrow slots (requires a multimodal GGUF + `--mmproj` flag)
 - **Vision-aware prompting**: The system prompt tells the LLM at runtime whether the reference images are actually visible - with images it grounds the anchor in what the frame shows, without them it anchors only on what you wrote, so a forgotten mmproj cannot make it invent frame details
-- **Optional negative prompt**: Toggle a second LLM pass on the same still-running `llama-server` to derive a negative prompt from the original prompt - no second model load (see below)
+- **Optional negative prompt**: Toggle it on and the same LLM turn also derives a negative prompt - the model answers with one JSON object holding both prompts, so one request, one server spawn, no extra pass (see below)
 - **Bypass-safe**: When the node is disabled/bypassed, the original prompt passes through unchanged
 - **Workflow persistence**: Enhanced prompt values are saved in the workflow JSON and preserved across sessions
 - **VRAM-aware**: Automatically unloads ComfyUI models before spawning llama-server, then frees memory after
@@ -77,7 +77,7 @@ Prompt enhancement with retry loop.
 | `mmproj_path` | String | Optional - path to multimodal projector `.gguf` for vision input |
 | `extra_flags` | String | Optional extra `llama-server` flags (default: Muse-Glimmer DFlash draft + `--top-p 0.95 --top-k 64`, see below) |
 | `ref_image_0` .. `ref_image_8` | Image | Optional dynamic reference images (0-9 slots via Autogrow) |
-| `generate_negative_prompt` | Boolean | Optional - also generate a negative prompt in a second LLM pass on the same server (default: off) |
+| `generate_negative_prompt` | Boolean | Optional - also generate a negative prompt in the same LLM turn as the enhanced prompt (one JSON response holds both, default: off) |
 
 **Outputs:**
 
@@ -88,9 +88,7 @@ Prompt enhancement with retry loop.
 
 ### Negative Prompt Generation
 
-Enable `generate_negative_prompt` to derive a negative prompt in a second LLM pass. The pass **reuses the same still-running `llama-server` instance** (no second model load, no second spawn) - it simply sends a second request with a generic negative-prompt system prompt while the model is already in VRAM.
-
-The user message for that pass contains your **original prompt** as the basis, plus the enhanced prompt for further reference (when one was produced). If the positive pass fails, the negative pass runs against the original prompt alone. The negative output is comma-separated "what to avoid" phrases targeting the specific subjects, styles, and failure modes of your prompt, plus general quality negatives. A refused response is discarded - you get an empty `negative_prompt`, never a refusal. Wire `negative_prompt` into your sampler's negative prompt input (or a CLIP Text Encode for the negative).
+Enable `generate_negative_prompt` to derive a negative prompt in the **same LLM turn** as the enhanced prompt: instead of a plain-text answer, the model is instructed to respond with a single JSON object (`{"positive": ..., "negative": ...}`), so the whole enhancement - positive and negative together - takes one request and one `llama-server` spawn/kill cycle. The negative is derived from your prompt: comma-separated "what to avoid" phrases targeting the specific subjects, styles, and failure modes of your prompt, plus general quality negatives. When the turn fails, both outputs fall back (original `prompt`, empty `negative_prompt`). A refusal in the negative member is discarded - you get an empty `negative_prompt`, never a refusal. Wire `negative_prompt` into your sampler's negative prompt input (or a CLIP Text Encode for the negative).
 
 ## Presets
 

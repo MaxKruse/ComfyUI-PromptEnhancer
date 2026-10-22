@@ -656,8 +656,10 @@ def enhance_prompt(
     Interruptible at any point: checks ComfyUI's interrupt state while the server
     starts up and while generating. Raises InterruptProcessingException on interrupt.
 
-    Returns EnhancementResult(positive, negative); negative is None unless
-    generate_negative is True and the turn produced a negative prompt.
+    Returns EnhancementResult(positive, negative) - always a result, never None:
+    on early failure (bad model path, server failed to start) both members are
+    None. negative is None unless generate_negative is True and the turn
+    produced a negative prompt.
 
     Both prompts arrive in one LLM turn via a JSON response object - see
     _enhance_json_instruction and _parse_enhancement_response.
@@ -668,12 +670,12 @@ def enhance_prompt(
 
     if not model_path or not os.path.isabs(model_path):
         logger.error("[PromptEnhancer] Model path must be absolute, got: %s", model_path)
-        return None
+        return EnhancementResult(None, None)
 
     model_path_resolved = Path(model_path).resolve()
     if not model_path_resolved.is_file():
         logger.error("[PromptEnhancer] Model file not found: %s", model_path)
-        return None
+        return EnhancementResult(None, None)
 
     _check_interrupt()
     free_gpu_memory()
@@ -683,7 +685,7 @@ def enhance_prompt(
         server_path, model_path, port, ctx_size, mmproj_path, extra_flags
     )
     if server_proc is None:
-        return None
+        return EnhancementResult(None, None)
 
     model_name = discover_model_name(base_url)
     ready_time = time.monotonic()

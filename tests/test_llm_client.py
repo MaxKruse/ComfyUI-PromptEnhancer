@@ -637,6 +637,23 @@ def test_enhance_prompt_failed_turn_yields_both_none(monkeypatch):
     assert len(turns) == 1
 
 
+def test_enhance_prompt_server_startup_failure_returns_empty_result(monkeypatch):
+    """When llama-server fails to start, enhance_prompt must return
+    EnhancementResult(None, None) - never a bare None: the node dereferences
+    result.positive and a bare None crashes the workflow with AttributeError."""
+    import llm_client
+
+    _install_fake_comfy(monkeypatch)
+    monkeypatch.setattr(llm_client, "free_gpu_memory", lambda: None)
+    monkeypatch.setattr(llm_client, "_start_llama_server", lambda *a, **k: (None, "", 0.0))
+
+    result = _call_enhance(generate_negative=True)
+
+    assert isinstance(result, llm_client.EnhancementResult)
+    assert result.positive is None
+    assert result.negative is None
+
+
 def test_enhance_prompt_negative_refusal_returns_none(monkeypatch):
     """A refusal in the "negative" member of the single-turn JSON response is
     discarded - refusals are never returned."""

@@ -168,12 +168,21 @@ def test_start_llama_server_logs_early_crash(monkeypatch, caplog):
 
 
 def test_build_command_parses_default_extra_flags():
-    """The node's default extra flags (Muse-Glimmer DFlash draft, quoted Windows path)
-    must survive shlex.split with the draft path intact."""
+    """The node's default extra flags are empty (plain llama-server, MOSS-Image
+    SFT workflow). An explicit flag string with a quoted Windows draft-model
+    path must survive shlex.split with the path intact."""
     import llm_client
     from nodes import DEFAULT_EXTRA_SERVER_ARGS
 
-    cmd = llm_client.build_command("llama-server", "model.gguf", 1234, extra_flags=DEFAULT_EXTRA_SERVER_ARGS)
+    assert DEFAULT_EXTRA_SERVER_ARGS == ""
+    cmd_empty = llm_client.build_command("llama-server", "model.gguf", 1234)
+    assert "--model-draft" not in cmd_empty
+
+    flags = (
+        '--model-draft "C:\\Users\\maxkr\\LLMs\\Muse-Glimmer\\dflash-kquant.gguf" '
+        "--spec-type draft-dflash --top-p 0.95 --top-k 64"
+    )
+    cmd = llm_client.build_command("llama-server", "model.gguf", 1234, extra_flags=flags)
 
     assert cmd[0] == "llama-server"
     assert "--model-draft" in cmd

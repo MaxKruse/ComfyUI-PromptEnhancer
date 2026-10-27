@@ -21,14 +21,22 @@ logger = logging.getLogger(__name__)
 
 # Support both package imports (ComfyUI) and direct imports (tests)
 try:
-    from .llm_client import enhance_prompt
+    from .llm_client import (
+        DEFAULT_VERBOSITY,
+        VERBOSITY_LEVELS,
+        enhance_prompt,
+    )
     from .presets import (
         get_default_preset,
         load_preset,
         list_presets,
     )
 except ImportError:
-    from llm_client import enhance_prompt
+    from llm_client import (
+        DEFAULT_VERBOSITY,
+        VERBOSITY_LEVELS,
+        enhance_prompt,
+    )
     from presets import (
         get_default_preset,
         load_preset,
@@ -43,13 +51,12 @@ DEFAULT_SERVER_PATH = "llama-server"
 # GGUF:      https://huggingface.co/mradermacher/Muse-Glimmer-30B-uncensored-i1-GGUF
 DEFAULT_MODEL_PATH = "C:/Users/maxkr/LLMs/Muse-Glimmer/Muse-Glimmer-30B-uncensored.i1-Q4_K_M.gguf"
 
-# Default extra server args: Muse-Glimmer DFlash draft (speculative decoding) tuned for
-# the Krea2_ZFilm workflow: 15 draft tokens per step, top-p 0.95, top-k 64.
-# Draft model: the standard (non-abliterated) Muse-Glimmer DFlash draft, k-quant GGUF.
-DEFAULT_EXTRA_SERVER_ARGS = (
-    '--model-draft "C:\\Users\\maxkr\\LLMs\\Muse-Glimmer\\dflash-kquant.gguf" '
-    "--spec-type draft-dflash --spec-draft-n-max 15 --top-p 0.95 --top-k 64"
-)
+# Default extra server args: none - plain llama-server, as used in the
+# MOSS-Image SFT workflow. For Muse-Glimmer, speculative decoding with the
+# DFlash draft works well (standard non-abliterated draft, k-quant GGUF):
+#   --model-draft "C:/Users/maxkr/LLMs/Muse-Glimmer/dflash-kquant.gguf"
+#   --spec-type draft-dflash --spec-draft-n-max 15 --top-p 0.95 --top-k 64
+DEFAULT_EXTRA_SERVER_ARGS = ""
 
 def _get_comfy_base_path() -> str:
     """Get the ComfyUI base directory for relative model paths."""
@@ -151,9 +158,9 @@ class PromptEnhancer(ComfyNode):
     Supports KREA-2 T2I, LTX 2.3 10Eros I2V, and MiniMax H3 R2V via presets.
     Each preset handles both SFW and NSFW content automatically.
     The target model is determined by the selected preset.
-    Defaults: Muse-Glimmer 30B uncensored with the DFlash draft model for
-    speculative decoding, plus sampling flags (top-p 0.95, top-k 64) - tuned
-    in the Krea2_ZFilm workflow.
+    Defaults (from the MOSS-Image SFT workflow): Muse-Glimmer 30B uncensored,
+    plain llama-server (no extra flags), ctx_size 20480, negative prompt on,
+    MEDIUM verbosity.
 
     This node:
     1. Unloads all ComfyUI models to free VRAM
@@ -197,15 +204,12 @@ class PromptEnhancer(ComfyNode):
                         "Here is additional info from the used loras: character has pink hair, blue eyes"
                     ),
                 ),
-                io.Combo.Input(
-                    "preset",
-                    options=display_names,
-                    default=default_display,
-                    tooltip=(
-                        "System prompt preset that guides how the LLM enhances your prompt.\n"
-                        "Each preset handles both SFW and NSFW content automatically.\n"
-                        "The target model is determined by the preset."
-                    ),
+                # LLM server group: server binary, model, projector, flags, output toggles
+                io.String.Input(
+                    "llama_server_path",
+                    default=DEFAULT_SERVER_PATH,
+                    placeholder="llama-server or full path to llama-server binary",
+                    tooltip="Path to the llama-server executable (or 'llama-server' if in PATH)",
                 ),
                 io.String.Input(
                     "llm_model_path",
@@ -217,18 +221,64 @@ class PromptEnhancer(ComfyNode):
                     tooltip="Path to the GGUF model file for llama-server",
                 ),
                 io.String.Input(
-                    "llama_server_path",
-                    default=DEFAULT_SERVER_PATH,
-                    placeholder="llama-server or full path to llama-server binary",
-                    tooltip="Path to the llama-server executable (or 'llama-server' if in PATH)",
+                    "mmproj_path",
+                    optional=True,
+                    default="",
+                    placeholder="Path to mmproj-*.gguf multimodal projector file",
+                    tooltip="Multimodal projector GGUF for vision input. Required when using reference images with a multimodal model.",
+                ),
+                io.String.Input(
+                    "extra_server_args",
+                    optional=True,
+                    default=DEFAULT_EXTRA_SERVER_ARGS,
+                    placeholder='e.g. --n-gpu-layers 99 --threads 8 --flash-attn --model-draft "C:/.../dflash.gguf" --spec-type draft-dflash (default: none)',
+                    tooltip="Extra command-line flags passed directly to llama-server. Space-separated.",
+                ),
+                io.Boolean.Input(
+                    "generate_negative_prompt",
+                    optional=True,
+                    default=True,
+                    tooltip=(
+                        "Also generate a negative prompt, requested in the SAME LLM turn as the "
+                        "enhanced prompt (the model answers with one JSON object holding both). "
+                        "Derived from your prompt; targets its specific failure modes plus general "
+                        "quality negatives. Format follows the verbosity setting: short tags for "
+                        "MINIMAL, a mix of comma items and full sentences for MEDIUM/HIGH. "
+                        "Result is on the 'negative_prompt' output (empty when off)."
+                    ),
+                ),
+                io.Combo.Input(
+                    "verbosity",
+                    options=list(VERBOSITY_LEVELS),
+                    default=DEFAULT_VERBOSITY,
+                    tooltip=(
+                        "How much detail the enhanced prompt (and the negative prompt) should contain.\n"
+                        "MINIMAL: almost booru-tag-like compact tags.\n"
+                        "LOW: slight improvement of your prompt, a few small details added.\n"
+                        "MEDIUM: the normal full enhancement.\n"
+                        "HIGH: extreme creativity - the LLM drafts 3 options per scene aspect and "
+                        "combines them in an alternating A-B-C pattern.\n"
+                        "The quality-gate word floor follows the level."
+                    ),
+                ),
+                # Everything else: target preset and generation parameters
+                io.Combo.Input(
+                    "preset",
+                    options=display_names,
+                    default=default_display,
+                    tooltip=(
+                        "System prompt preset that guides how the LLM enhances your prompt.\n"
+                        "Each preset handles both SFW and NSFW content automatically.\n"
+                        "The target model is determined by the preset."
+                    ),
                 ),
                 io.Int.Input(
                     "ctx_size",
-                    default=20000,
+                    default=20480,
                     min=2048,
                     max=131072,
                     step=1024,
-                    tooltip="Prompt context window size in tokens. 20000 covers the largest presets (MiniMax H3 with LoRA routing guide), user prompt, thinking, and generation, with headroom for multiple reference images.",
+                    tooltip="Prompt context window size in tokens. 20480 covers the largest presets (MiniMax H3 with LoRA routing guide), user prompt, thinking, and generation, with headroom for multiple reference images.",
                 ),
                 io.Int.Input(
                     "seed",
@@ -253,22 +303,7 @@ class PromptEnhancer(ComfyNode):
                     min=10,
                     max=500,
                     step=1,
-                    tooltip="Minimum word count for an accepted enhanced prompt.",
-                ),
-                # Optional inputs
-                io.String.Input(
-                    "mmproj_path",
-                    optional=True,
-                    default="",
-                    placeholder="Path to mmproj-*.gguf multimodal projector file",
-                    tooltip="Multimodal projector GGUF for vision input. Required when using reference images with a multimodal model.",
-                ),
-                io.String.Input(
-                    "extra_server_args",
-                    optional=True,
-                    default=DEFAULT_EXTRA_SERVER_ARGS,
-                    placeholder='e.g. --n-gpu-layers 99 --threads 8 --flash-attn (default: Muse-Glimmer DFlash draft + sampling flags)',
-                    tooltip="Extra command-line flags passed directly to llama-server. Space-separated.",
+                    tooltip="Minimum word count for an accepted enhanced prompt. Adjusted per verbosity level: MINIMAL is capped at 8, LOW at 20, HIGH raised to at least 100.",
                 ),
                 io.Autogrow.Input(
                     "ref_images",
@@ -287,17 +322,6 @@ class PromptEnhancer(ComfyNode):
                     ),
                     tooltip="Dynamic reference images (0-9). The LLM sees all connected images.",
                 ),
-                io.Boolean.Input(
-                    "generate_negative_prompt",
-                    optional=True,
-                    default=False,
-                    tooltip=(
-                        "Also generate a negative prompt, requested in the SAME LLM turn as the "
-                        "enhanced prompt (the model answers with one JSON object holding both). "
-                        "Derived from your prompt; targets its specific failure modes plus general "
-                        "quality negatives. Result is on the 'negative_prompt' output (empty when off)."
-                    ),
-                ),
             ],
             outputs=[
                 io.String.Output(
@@ -310,8 +334,9 @@ class PromptEnhancer(ComfyNode):
                     display_name="negative_prompt",
                     tooltip=(
                         "The LLM-generated negative prompt, produced in the same turn as the enhanced "
-                        "prompt. Comma-separated traits to avoid, derived from your prompt. "
-                        "Empty when generate_negative_prompt is off."
+                        "prompt. Derived from your prompt; format follows the verbosity setting "
+                        "(short tags for MINIMAL, a mix of comma items and full sentences for "
+                        "MEDIUM/HIGH). Empty when generate_negative_prompt is off."
                     ),
                 ),
             ],
@@ -334,7 +359,8 @@ class PromptEnhancer(ComfyNode):
         ref_images: dict[str, any] | None = None,
         mmproj_path: str = "",
         extra_server_args: str = DEFAULT_EXTRA_SERVER_ARGS,
-        generate_negative_prompt: bool = False,
+        generate_negative_prompt: bool = True,
+        verbosity: str = DEFAULT_VERBOSITY,
         **kwargs,
     ) -> io.NodeOutput:
         if not prompt or not prompt.strip():
@@ -374,6 +400,7 @@ class PromptEnhancer(ComfyNode):
             mmproj_path=mmproj,
             extra_flags=extra_server_args,
             generate_negative=generate_negative_prompt,
+            verbosity=verbosity,
         )
 
         return io.NodeOutput(result.positive if result.positive else prompt, result.negative or "")

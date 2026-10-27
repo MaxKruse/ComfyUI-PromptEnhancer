@@ -208,8 +208,8 @@ def test_prompt_enhancer_has_optional_mmproj():
     )
 
 
-def test_prompt_enhancer_ctx_size_defaults_to_20000():
-    """ctx_size should default to 20000 (MiniMax H3 presets with LoRA routing guide plus reference images)."""
+def test_prompt_enhancer_ctx_size_defaults_to_20480():
+    """ctx_size should default to 20480 (MOSS-Image SFT workflow: largest presets plus reference images)."""
     from nodes import PromptEnhancer
 
     input_types = _get_input_types(PromptEnhancer)
@@ -218,7 +218,7 @@ def test_prompt_enhancer_ctx_size_defaults_to_20000():
 
     # V3 io.Int.Input: type is "INT", config is second element
     assert ctx_def[0] == "INT"
-    assert ctx_def[1].get("default") == 20000
+    assert ctx_def[1].get("default") == 20480
 
 
 def test_prompt_enhancer_model_defaults_to_muse_glimmer_uncensored():
@@ -246,38 +246,58 @@ def test_prompt_enhancer_min_words_defaults_to_50():
     assert mw_def[1].get("default") == 50
 
 
-def test_prompt_enhancer_extra_args_default_uses_dflash_draft():
-    """extra_server_args default must enable Muse-Glimmer DFlash speculative decoding
-    with the working workflow's sampling flags (top-p 0.95, top-k 64)."""
+def test_prompt_enhancer_verbosity_input():
+    """verbosity must be a COMBO input with the four levels, defaulting to MEDIUM
+    (the normal procedure)."""
+    from nodes import PromptEnhancer
+
+    schema = PromptEnhancer.define_schema()
+    verbosity = next(i for i in schema.inputs if i.id == "verbosity")
+
+    assert list(verbosity.options) == ["MINIMAL", "LOW", "MEDIUM", "HIGH"]
+    assert verbosity.default == "MEDIUM"
+
+
+def test_prompt_enhancer_extra_args_default_empty():
+    """extra_server_args must default to empty - plain llama-server, as used in
+    the MOSS-Image SFT workflow (DFlash draft flags are an opt-in example now)."""
     from nodes import PromptEnhancer
 
     input_types = _get_input_types(PromptEnhancer)
     optional = input_types.get("optional", {})
     default = optional["extra_server_args"][1].get("default", "")
 
-    assert "--model-draft" in default
-    assert "--spec-type draft-dflash" in default
-    assert "--spec-draft-n-max 15" in default
-    assert "--top-p 0.95" in default
-    assert "--top-k 64" in default
+    assert default == ""
 
 
-def test_prompt_enhancer_negative_prompt_toggle_is_last_input():
-    """The generate_negative_prompt toggle is the LAST input, optional, and defaults
-    off, so existing workflows load unchanged with the old behavior."""
+def test_prompt_enhancer_input_grouping():
+    """Inputs are grouped: prompt first (bypass pass-through), then the LLM
+    server group (server path, model path, mmproj, extra flags, negative
+    toggle, verbosity), then the rest (preset, ctx, seed, retries, min_words,
+    ref images)."""
     from nodes import PromptEnhancer
 
     schema = PromptEnhancer.define_schema()
-    last = schema.inputs[-1]
-    assert last.id == "generate_negative_prompt", (
-        f"generate_negative_prompt should be the last input, got {last.id}"
-    )
-    assert last.optional is True
-    assert last.default is False
+    assert [i.id for i in schema.inputs] == [
+        "prompt",
+        "llama_server_path",
+        "llm_model_path",
+        "mmproj_path",
+        "extra_server_args",
+        "generate_negative_prompt",
+        "verbosity",
+        "preset",
+        "ctx_size",
+        "seed",
+        "max_retries",
+        "min_words",
+        "ref_images",
+    ]
 
 
 def test_prompt_enhancer_negative_prompt_toggle_is_boolean():
-    """The toggle must render as a BOOLEAN widget in the legacy input shape."""
+    """The toggle must render as a BOOLEAN widget in the legacy input shape,
+    defaulting ON (the MOSS-Image SFT workflow's setting)."""
     from nodes import PromptEnhancer
 
     input_types = _get_input_types(PromptEnhancer)
@@ -286,7 +306,7 @@ def test_prompt_enhancer_negative_prompt_toggle_is_boolean():
         f"generate_negative_prompt should be an optional input. Optional keys: {list(optional.keys())}"
     )
     assert optional["generate_negative_prompt"][0] == "BOOLEAN"
-    assert optional["generate_negative_prompt"][1].get("default") is False
+    assert optional["generate_negative_prompt"][1].get("default") is True
 
 
 def test_prompt_enhancer_has_negative_prompt_output():

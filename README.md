@@ -23,7 +23,8 @@ Drop this into your `custom_nodes/` directory. No API keys needed - runs entirel
 - **Seeded sampling**: The seed is sent to the LLM per request; each retry attempt uses the next seed value, so retries produce genuinely different output
 - **Dynamic reference images**: Connect 0-9 reference images via Autogrow slots (requires a multimodal GGUF + `--mmproj` flag)
 - **Vision-aware prompting**: The system prompt tells the LLM at runtime whether the reference images are actually visible - with images it grounds the anchor in what the frame shows, without them it anchors only on what you wrote, so a forgotten mmproj cannot make it invent frame details
-- **Optional negative prompt**: Toggle it on and the same LLM turn also derives a negative prompt - the model answers with one JSON object holding both prompts, so one request, one server spawn, no extra pass (see below)
+- **Negative prompt (on by default)**: The same LLM turn also derives a negative prompt - the model answers with one JSON object holding both prompts, so one request, one server spawn, no extra pass. Its format follows the verbosity setting (see below); can be toggled off
+- **Verbosity control**: `MINIMAL` (almost booru-tag-like), `LOW` (slight improvement), `MEDIUM` (normal procedure, default), `HIGH` (extreme creativity - 3 options per scene aspect picked in an alternating A-B-C pattern). The quality-gate word floor follows the level (see below)
 - **Bypass-safe**: When the node is disabled/bypassed, the original prompt passes through unchanged
 - **Workflow persistence**: Enhanced prompt values are saved in the workflow JSON and preserved across sessions
 - **VRAM-aware**: Automatically unloads ComfyUI models before spawning llama-server, then frees memory after
@@ -37,7 +38,7 @@ Drop this into your `custom_nodes/` directory. No API keys needed - runs entirel
 
 Large reasoning-capable models give the best results. The node defaults are tuned for the first one:
 
-- **Muse-Glimmer 30B Uncensored Heretic** (Q4_K_M imatrix, ~16 GB) - recommended default. Heretic uncensored variant of Meta's Muse-Glimmer 30B ([base model](https://huggingface.co/TrevorJS/Muse-Glimmer-30B-uncensored), [GGUF](https://huggingface.co/mradermacher/Muse-Glimmer-30B-Uncensored-Heretic-i1-GGUF)). Pair it with the Muse-Glimmer DFlash draft model (`--spec-type draft-dflash`) for speculative decoding - that is the node's built-in default for `extra_flags`.
+- **Muse-Glimmer 30B Uncensored Heretic** (Q4_K_M imatrix, ~16 GB) - recommended default. Heretic uncensored variant of Meta's Muse-Glimmer 30B ([base model](https://huggingface.co/TrevorJS/Muse-Glimmer-30B-uncensored), [GGUF](https://huggingface.co/mradermacher/Muse-Glimmer-30B-Uncensored-Heretic-i1-GGUF)). Pair it with the Muse-Glimmer DFlash draft model (`--spec-type draft-dflash`) for speculative decoding - the node no longer ships these flags by default, so paste them into `extra_server_args` (Muse Glimmer example below).
 - **Gemma 4 26B A4B** (QAT Q4_0, ~15 GB) - alternative for faster CPU/hybrid setups. MoE with only ~4B active params, so it generates much faster while keeping near-31B quality
 - **Qwen 3.6 35B** (Q4_K_M, ~20 GB) - strong creative expansion and instruction following
 
@@ -66,18 +67,19 @@ Prompt enhancement with retry loop.
 
 | Input | Type | Description |
 |-------|------|-------------|
-| `prompt` | String | Your base prompt. The preset auto-detects SFW vs NSFW content |
-| `preset` | Dropdown | System prompt preset (determines target model and expansion style) |
-| `llm_model_path` | String | Path to your `.gguf` model |
+| `prompt` | String | Your base prompt. The preset auto-detects SFW vs NSFW content. First input so it passes through unchanged on bypass |
 | `llama_server_path` | String | Path to `llama-server` binary (default: `llama-server`) |
-| `ctx_size` | Int | Context window size in tokens (default: 20000, range: 2048-131072) |
+| `llm_model_path` | String | Path to your `.gguf` model |
+| `mmproj_path` | String | Optional - path to multimodal projector `.gguf` for vision input |
+| `extra_server_args` | String | Optional extra `llama-server` flags (default: none, see Extra Flags Reference) |
+| `generate_negative_prompt` | Boolean | Optional - also generate a negative prompt in the same LLM turn as the enhanced prompt (one JSON response holds both, default: on) |
+| `verbosity` | Dropdown | Detail level of the enhancement: MINIMAL / LOW / MEDIUM (default) / HIGH - see Verbosity below |
+| `preset` | Dropdown | System prompt preset (determines target model and expansion style) |
+| `ctx_size` | Int | Context window size in tokens (default: 20480, range: 2048-131072) |
 | `seed` | Int | Sampling seed sent to the LLM per request (default: 0, auto-randomizes after each run). Each retry attempt uses the next seed value; -1 = random base seed each run |
 | `max_retries` | Int | Max generation attempts until a quality prompt is accepted (default: 5) |
-| `min_words` | Int | Minimum word count for an accepted prompt (default: 50) |
-| `mmproj_path` | String | Optional - path to multimodal projector `.gguf` for vision input |
-| `extra_flags` | String | Optional extra `llama-server` flags (default: Muse-Glimmer DFlash draft + `--top-p 0.95 --top-k 64`, see below) |
+| `min_words` | Int | Minimum word count for an accepted prompt (default: 50, adjusted per verbosity level) |
 | `ref_image_0` .. `ref_image_8` | Image | Optional dynamic reference images (0-9 slots via Autogrow) |
-| `generate_negative_prompt` | Boolean | Optional - also generate a negative prompt in the same LLM turn as the enhanced prompt (one JSON response holds both, default: off) |
 
 **Outputs:**
 
@@ -88,7 +90,20 @@ Prompt enhancement with retry loop.
 
 ### Negative Prompt Generation
 
-Enable `generate_negative_prompt` to derive a negative prompt in the **same LLM turn** as the enhanced prompt: instead of a plain-text answer, the model is instructed to respond with a single JSON object (`{"positive": ..., "negative": ...}`), so the whole enhancement - positive and negative together - takes one request and one `llama-server` spawn/kill cycle. The negative is derived from your prompt: comma-separated "what to avoid" phrases targeting the specific subjects, styles, and failure modes of your prompt, plus general quality negatives. When the turn fails, both outputs fall back (original `prompt`, empty `negative_prompt`). A refusal in the negative member is discarded - you get an empty `negative_prompt`, never a refusal. Wire `negative_prompt` into your sampler's negative prompt input (or a CLIP Text Encode for the negative).
+`generate_negative_prompt` is **on by default**: the same LLM turn that enhances your prompt also derives a negative prompt. Instead of a plain-text answer, the model is instructed to respond with a single JSON object (`{"positive": ..., "negative": ...}`), so the whole enhancement - positive and negative together - takes one request and one `llama-server` spawn/kill cycle. The negative is derived from your prompt and targets the specific subjects, styles, and failure modes of your prompt, plus general quality negatives. Its format follows the **verbosity** setting: booru-like short tags for `MINIMAL` (no full sentences), mostly a comma-separated list for `LOW`, a mix of comma-separated short items and specific full sentences for `MEDIUM`, and specific full sentences plus a comma-separated cluster of general quality negatives for `HIGH`. When the turn fails, both outputs fall back (original `prompt`, empty `negative_prompt`). A refusal in the negative member is discarded - you get an empty `negative_prompt`, never a refusal. Wire `negative_prompt` into your sampler's negative prompt input (or a CLIP Text Encode for the negative).
+
+### Verbosity
+
+The `verbosity` dropdown controls how much detail the enhanced prompt (and the negative prompt) contains:
+
+| Level | Behavior |
+|-------|----------|
+| `MINIMAL` | Almost booru-tag-like: a compact list of short tags that preserve your request, no long sentences. Quality-gate word floor lowered to 8. |
+| `LOW` | Slight improvement of your prompt - keep your wording and add only a few small details (quality, lighting, composition). Word floor lowered to 20. |
+| `MEDIUM` | The normal procedure: a full expansion into the target model's preferred style (default). Word floor unchanged (the `min_words` input). |
+| `HIGH` | Extreme creativity: for every aspect of the scene (subject, action, setting, lighting, camera, style, mood, ...) the LLM drafts three distinct creative options (A, B, C) and picks one per aspect in an alternating A-B-C-A-B-C pattern, so no single option's style dominates. Word floor raised to at least 100. |
+
+The instruction block is appended to the preset's system prompt, so it works with every preset. The negative prompt format follows the same level (see above).
 
 ## Presets
 
@@ -105,7 +120,7 @@ Enable `generate_negative_prompt` to derive a negative prompt in the **same LLM 
 | `Qwen-Image 2.1 - i2i` | Qwen-Image 2.1 Image Editing (I2I) | Rewrites vague edit instructions into precise, actionable editing directives anchored on the input image(s) - `<Picture N>` tags for multi-image input, each image's role (canvas vs. material source) stated, full attribute disentanglement (edit exactly the named attributes, hold everything else at input fidelity), dual Chinese/English prose + rendered-text language rules. Based on the [official Qwen-Image 2.1 prompt rewriter](https://github.com/QwenLM/Qwen-Image-2.1/tree/main/prompt_rewrite). Handles both SFW and NSFW content. | 8192 |
 | `Wan 2.2 - t2v-i2v` | Wan 2.2 Text/Image-to-Video | Auto-detects T2V (no images: complete cinematic scene - completed subject features, at most 4 cinematic aesthetic choices, explicit motion, one primary camera move, 80-120 words) vs I2V (reference image as first frame: delta-only - motion, change, camera behavior in 50-100 words, static content never re-described). Based on the [official Wan 2.2 prompt rewriter](https://github.com/Wan-Video/Wan2.2/blob/main/wan/utils/system_prompt.py) and [community research](https://www.viewcomfy.com/blog/wan2.2_prompt_guide_with_examples). Handles both SFW and NSFW content. | 8192 |
 
-Recommended context size for `llama-server -c` (the node defaults to 20000). Each request fits in: system prompt + user prompt + reference images (via mmproj, roughly 0.5-2k tokens per image) + the expanded output. Budgets: KREA 2 T2I is text-only (about 1.2k system + about 0.5k output = under 2k, so 4096 leaves 2x headroom); LTX 2.3/2.5 I2V adds 1-2 reference images (about 4-7k total); MiniMax H3 base can output uncapped, dialogue-dense descriptions (about 8k with a first-frame image); MiniMax H3 r2v takes several reference images plus a 350-500 word output (about 7-9k); Qwen-Image 2.1 t2i is text-only (about 1.7k system + about 0.7k output, so 4096 leaves headroom); Qwen-Image 2.1 i2i adds 1-N reference images (about 4-7k with 1-2 images, more for multi-image composites); Wan 2.2 is text-only in T2V mode (about 2k total) and adds 1-2 reference images in I2V mode (about 4-6k), so 8192 leaves headroom. Reference images dominate the budget: every connected image adds roughly 0.5-2k tokens, so a multi-image job scales up fast - that is why the MiniMax H3 presets recommend 20000. Lowering `-c` for text-only work saves KV-cache RAM; if you run a reasoning model with thinking enabled, keep the preset's recommended value (20000 for MiniMax H3) so the thinking budget does not starve the output.
+Recommended context size for `llama-server -c` (the node defaults to 20480). Each request fits in: system prompt + user prompt + reference images (via mmproj, roughly 0.5-2k tokens per image) + the expanded output. Budgets: KREA 2 T2I is text-only (about 1.2k system + about 0.5k output = under 2k, so 4096 leaves 2x headroom); LTX 2.3/2.5 I2V adds 1-2 reference images (about 4-7k total); MiniMax H3 base can output uncapped, dialogue-dense descriptions (about 8k with a first-frame image); MiniMax H3 r2v takes several reference images plus a 350-500 word output (about 7-9k); Qwen-Image 2.1 t2i is text-only (about 1.7k system + about 0.7k output, so 4096 leaves headroom); Qwen-Image 2.1 i2i adds 1-N reference images (about 4-7k with 1-2 images, more for multi-image composites); Wan 2.2 is text-only in T2V mode (about 2k total) and adds 1-2 reference images in I2V mode (about 4-6k), so 8192 leaves headroom. Reference images dominate the budget: every connected image adds roughly 0.5-2k tokens, so a multi-image job scales up fast - that is why the MiniMax H3 presets recommend 20000. Lowering `-c` for text-only work saves KV-cache RAM; if you run a reasoning model with thinking enabled, keep the preset's recommended value (20000 for MiniMax H3) so the thinking budget does not starve the output.
 
 Each preset contains both general and NSFW-specific directives. The LLM detects the content type from your prompt and applies the appropriate rules automatically - no need to switch presets.
 
@@ -192,13 +207,13 @@ Requires:
 
 ## Extra Flags Reference
 
-The `extra_flags` input passes arguments directly to `llama-server`. Its built-in default covers the recommended Muse-Glimmer setup (DFlash draft speculative decoding + sampling flags, below). Here are the other flags used in the example workflows:
+The `extra_server_args` input passes arguments directly to `llama-server`. The default is empty (plain llama-server, as in the MOSS-Image SFT workflow). Here are the flags used in the example workflows:
 
 | Flag | Description |
 |------|-------------|
 | `--no-mmap` | Disable memory-mapping the model file. Only use when the model fits in VRAM easily - avoids disk I/O during generation. |
 | `--threads N` | CPU threads for generation. Set to ~75% of physical (performance) cores - not hyperthreaded/logical threads. |
-| `-c N` / `--ctx-size N` | Prompt context window size in tokens. The node default is `20000` (the `ctx_size` input already sets this; only needed here to override). |
+| `-c N` / `--ctx-size N` | Prompt context window size in tokens. The node default is `20480` (the `ctx_size` input already sets this; only needed here to override). |
 | `--mmproj PATH` | Path to the multimodal projector GGUF file. Required for LTX I2V (reference image input). Optional for KREA 2 T2I - use as a visual hint for the LLM. Must match the base model. |
 | `--model-draft PATH` + `--spec-type ...` | Speculative decoding for generation speedup. A draft model pre-generates candidate tokens that the main model accepts or rejects in parallel. Only adds value if your hardware has headroom to run both models. `draft-mtp` uses Multi-Token Prediction (requires an MTP-trained draft model). `draft-dflash` uses a DFlash draft model (for Muse-Glimmer 30B: the standard, non-abliterated Muse-Glimmer DFlash draft, e.g. `dflash-kquant.gguf`). |
 | `--spec-draft-n-max N` | Max draft tokens per speculative step with `--spec-type draft-dflash`. `15` works well for Muse-Glimmer. |
@@ -211,7 +226,7 @@ The `extra_flags` input passes arguments directly to `llama-server`. Its built-i
   --spec-type draft-dflash --spec-draft-n-max 15 --top-p 0.95 --top-k 64
 ```
 
-This is the node's built-in default for `extra_flags` (Muse-Glimmer 30B Heretic + DFlash draft). Muse-Glimmer is multimodal: to send reference images, add `--mmproj "<path/to/mmproj-Muse-Glimmer-30B-BF16.gguf>"` to the same input.
+This is the recommended `extra_server_args` setup for Muse-Glimmer 30B (Heretic + DFlash draft) - paste it into the node's `extra_server_args` input to enable it. Muse-Glimmer is multimodal: to send reference images, add `--mmproj "<path/to/mmproj-Muse-Glimmer-30B-BF16.gguf>"` to the same input.
 
 ### KREA 2 T2I (text-only)
 

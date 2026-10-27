@@ -489,21 +489,79 @@ def test_enhance_json_instruction_off_requests_positive_only():
     - the model is never asked for a negative prompt it was not opted into."""
     import llm_client
 
-    text = llm_client._enhance_json_instruction(False)
+    text = llm_client._enhance_json_instruction(False, "MEDIUM")
     assert '"positive"' in text
     assert '"negative"' not in text
 
 
 def test_enhance_json_instruction_on_requests_both_keys():
     """With the toggle on the instruction requests both keys and carries the
-    negative-prompt writing rules (failure modes + general quality negatives)."""
+    negative-prompt writing rules (failure modes + general quality negatives),
+    with the MEDIUM negative format being a mix of comma items and full sentences."""
     import llm_client
 
-    text = llm_client._enhance_json_instruction(True)
+    text = llm_client._enhance_json_instruction(True, "MEDIUM")
     assert '"positive"' in text
     assert '"negative"' in text
     assert "failure modes" in text
     assert "quality negatives" in text
+    assert "full sentences" in text
+def test_verbosity_instruction_levels():
+    """Each verbosity level must produce its own instruction block; unknown
+    values fall back to MEDIUM (the normal procedure)."""
+    import llm_client
+
+    minimal = llm_client._verbosity_instruction("MINIMAL")
+    low = llm_client._verbosity_instruction("LOW")
+    medium = llm_client._verbosity_instruction("MEDIUM")
+    high = llm_client._verbosity_instruction("HIGH")
+
+    assert "booru" in minimal and "tags" in minimal
+    assert "Slightly improve" in low
+    assert "normal procedure" in medium
+    assert "three distinct" in high and "A-B-C" in high
+    assert len({minimal, low, medium, high}) == 4
+    assert llm_client._verbosity_instruction("nope") == medium
+    assert llm_client.VERBOSITY_LEVELS == ("MINIMAL", "LOW", "MEDIUM", "HIGH")
+    assert llm_client.DEFAULT_VERBOSITY == "MEDIUM"
+
+
+def test_effective_min_words_scales_with_verbosity():
+    """The quality-gate word floor follows verbosity: MINIMAL/LOW are lowered so
+    short outputs pass, HIGH is raised, MEDIUM is untouched."""
+    import llm_client
+
+    assert llm_client._effective_min_words("MINIMAL", 50) == 8
+    assert llm_client._effective_min_words("LOW", 50) == 20
+    assert llm_client._effective_min_words("MEDIUM", 50) == 50
+    assert llm_client._effective_min_words("HIGH", 50) == 100
+    # the user's min_words wins when it is already outside the level's adjustment
+    assert llm_client._effective_min_words("MINIMAL", 5) == 5
+    assert llm_client._effective_min_words("HIGH", 200) == 200
+
+
+def test_enhance_json_instruction_negative_format_follows_verbosity():
+    """The "negative" member's format rule follows verbosity: booru tags for
+    MINIMAL, mostly comma items for LOW, a mix of comma items and full
+    sentences for MEDIUM and HIGH."""
+    import llm_client
+
+    minimal = llm_client._enhance_json_instruction(True, "MINIMAL")
+    low = llm_client._enhance_json_instruction(True, "LOW")
+    medium = llm_client._enhance_json_instruction(True, "MEDIUM")
+    high = llm_client._enhance_json_instruction(True, "HIGH")
+
+    assert "booru" in minimal and "No full sentences" in minimal
+    assert "mostly as a comma-separated" in low
+    assert "mix" in medium and "full sentences" in medium
+    assert "full sentences" in high and "comma-separated cluster" in high
+    # the format rule is also reflected in the JSON member placeholder
+    assert "short comma-separated negative tags" in minimal
+    assert "mixing comma items and specific full sentences" in medium
+    # the common writing rules survive at every level
+    for text in (minimal, low, medium, high):
+        assert "failure modes" in text
+        assert "quality negatives" in text
 
 
 def test_parse_enhancement_response_plain_and_fenced_json():
@@ -554,7 +612,7 @@ def _install_fake_enhance_environment(monkeypatch, turn_result):
 
     def fake_retry_loop(base_url, model_name, system_prompt, user_prompt, images, max_retries, min_words, seed):
         events.append("turn")
-        turns.append({"system": system_prompt, "user": user_prompt})
+        turns.append({"system": system_prompt, "user": user_prompt, "min_words": min_words})
         return turn_result
 
     monkeypatch.setattr(llm_client, "_start_llama_server", fake_start)
@@ -670,4 +728,20 @@ def test_enhance_prompt_negative_refusal_returns_none(monkeypatch):
 
     assert positive == "enhanced positive prompt"
     assert negative is None
+    assert events == ["spawn", "turn", "kill"]
+
+
+def test_enhance_prompt_injects_verbosity_and_scales_gate(monkeypatch):
+    """The verbosity instruction block must reach the system prompt, and the
+    retry loop's word floor must follow the level (MINIMAL caps at 8)."""
+    import json
+
+    events, turns = _install_fake_enhance_environment(
+        monkeypatch,
+        json.dumps({"positive": "enhanced", "negative": "blurry"}),
+    )
+    _call_enhance(verbosity="MINIMAL", generate_negative=True)
+
+    assert "Output verbosity: MINIMAL" in turns[0]["system"]
+    assert turns[0]["min_words"] == 8
     assert events == ["spawn", "turn", "kill"]

@@ -57,8 +57,104 @@ REFUSAL_PATTERNS = (
 # prompt (one JSON object per response), so its writing rules ride along in the
 # JSON instruction below instead of in a separate system prompt.
 
+# Output verbosity levels for the enhanced prompt. The selected level is
+# injected into the system prompt as an instruction block (see
+# _verbosity_instruction) and also shapes the "negative" member's format in
+# _enhance_json_instruction: MINIMAL is almost booru-tag-like, LOW stays close
+# to the user prompt, MEDIUM is the normal full enhancement, HIGH forces
+# extreme creativity. The quality gate's word floor follows the level (see
+# _effective_min_words) so short MINIMAL/LOW outputs are not rejected.
+VERBOSITY_LEVELS = ("MINIMAL", "LOW", "MEDIUM", "HIGH")
+DEFAULT_VERBOSITY = "MEDIUM"
 
-def _enhance_json_instruction(generate_negative: bool) -> str:
+
+def _verbosity_instruction(verbosity: str) -> str:
+    """Build the verbosity instruction block injected into the system prompt.
+
+    MEDIUM is the normal procedure; unknown values fall back to it.
+    """
+    blocks = {
+        "MINIMAL": (
+            "Output verbosity: MINIMAL. Write the enhanced prompt almost like a booru tag "
+            "list: a compact, comma-separated run of short tags covering the subject, action, "
+            "attributes, style, and lighting. No full sentences, no paragraphs, no filler prose. "
+            "Every concrete detail from the user prompt must survive as a tag.\n"
+        ),
+        "LOW": (
+            "Output verbosity: LOW. Slightly improve the user's prompt: fix awkward phrasing, "
+            "sharpen the key details, and add only a small number of supporting details "
+            "(a few adjectives, one lighting or atmosphere touch). Keep it close to the length "
+            "and structure of the original. No long elaboration, no invented subplots.\n"
+        ),
+        "MEDIUM": (
+            "Output verbosity: MEDIUM. Follow the normal procedure described above: develop the "
+            "scene fully at the depth and length the system prompt calls for.\n"
+        ),
+        "HIGH": (
+            "Output verbosity: HIGH. Force extreme creativity. For each major aspect of the "
+            "scene (subject, action, framing and composition, lighting, atmosphere, style, and "
+            "any technical direction the system prompt requires), first work out three distinct "
+            "creative options (A, B, C), then commit to the final prompt by picking the options "
+            "in an alternating A-B-C-A-B-C order across the aspects, so the result combines "
+            "different creative directions instead of repeating one. Write the outcome in full detail.\n"
+        ),
+    }
+    return blocks.get(verbosity, blocks["MEDIUM"])
+
+
+def _effective_min_words(verbosity: str, min_words: int) -> int:
+    """Quality-gate word floor for a verbosity level.
+
+    MINIMAL and LOW outputs are deliberately short (tag-like / close to the
+    original), so the floor is lowered; HIGH is an extreme-creativity
+    elaboration, so the floor is raised. MEDIUM uses the user's min_words as-is.
+    """
+    if verbosity == "MINIMAL":
+        return min(min_words, 8)
+    if verbosity == "LOW":
+        return min(min_words, 20)
+    if verbosity == "HIGH":
+        return max(min_words, 100)
+    return min_words
+
+
+def _negative_format_rule(verbosity: str) -> str:
+    """Formatting rule for the "negative" JSON member, per verbosity level."""
+    rules = {
+        "MINIMAL": (
+            '- Format "negative" almost booru-tag-like: a short list of comma-separated '
+            "failure-mode tags. No full sentences."
+        ),
+        "LOW": (
+            '- Format "negative" mostly as a comma-separated list of short items; a few '
+            "short phrases at most. No long sentences."
+        ),
+        "MEDIUM": (
+            '- Format "negative" as a mix: comma-separated short items for the specific '
+            "failure modes, plus a few more specific full sentences spelling out exactly "
+            "what to avoid."
+        ),
+        "HIGH": (
+            '- Format "negative" as a mix dominated by specific full sentences: descriptive '
+            "sentences spelling out exactly what to avoid, interspersed with a "
+            "comma-separated cluster of general quality negatives."
+        ),
+    }
+    return rules.get(verbosity, rules["MEDIUM"])
+
+
+def _negative_placeholder(verbosity: str) -> str:
+    """Short description of the expected "negative" value, per verbosity level."""
+    placeholders = {
+        "MINIMAL": "short comma-separated negative tags",
+        "LOW": "mostly comma-separated negative prompt",
+        "MEDIUM": "negative prompt mixing comma items and specific full sentences",
+        "HIGH": "negative prompt mixing specific full sentences and comma items",
+    }
+    return placeholders.get(verbosity, placeholders["MEDIUM"])
+
+
+def _enhance_json_instruction(generate_negative: bool, verbosity: str = DEFAULT_VERBOSITY) -> str:
     '''Build the single-turn JSON response instruction for the enhance pass.
 
     The model answers with one JSON object and nothing else, holding the enhanced
@@ -66,7 +162,9 @@ def _enhance_json_instruction(generate_negative: bool) -> str:
     negative prompt in the same response. The negative member is only included
     when generate_negative is True, so the model never fabricates a negative
     prompt the user did not ask for; its value is an empty string when nothing
-    applies.
+    applies. The negative prompt's format follows the verbosity level: short
+    comma-separated tags for MINIMAL, mostly comma items for LOW, and a mix of
+    comma items with specific full sentences for MEDIUM/HIGH.
     '''
     lines = [
         'Respond with a single JSON object and nothing else, with exactly these keys:',
@@ -74,15 +172,16 @@ def _enhance_json_instruction(generate_negative: bool) -> str:
     ]
     if generate_negative:
         lines.append('  "positive": "<enhanced prompt>",')
-        lines.append('  "negative": "<comma-separated negative prompt>"')
+        lines.append(f'  "negative": "<{_negative_placeholder(verbosity)}>"')
     else:
         lines.append('  "positive": "<enhanced prompt>"')
     lines.append('}')
     lines.append('- "positive" is the enhanced prompt text itself - plain text, no markdown, no labels, no code fences.')
     if generate_negative:
         lines.extend([
-            '- "negative" is a comma-separated list of traits the generation model must AVOID in the output, '
+            '- "negative" is a list of traits the generation model must AVOID in the output, '
             'derived from the user prompt, or an empty string when nothing applies.',
+            _negative_format_rule(verbosity),
             '- Target the prompt\'s specific subjects, actions, styles, lighting, and framing, and list their '
             'most likely failure modes (distorted anatomy, wrong or inconsistent colors, temporal flicker and '
             'motion inconsistencies for video, misplaced or duplicated objects, broken perspective).',
@@ -642,6 +741,7 @@ def enhance_prompt(
     min_words: int = 50,
     images = None,
     generate_negative: bool = False,
+    verbosity: str = DEFAULT_VERBOSITY,
 ) -> EnhancementResult:
     """Enhance a prompt by spawning a temporary llama-server instance.
 
@@ -651,7 +751,12 @@ def enhance_prompt(
 
     *generate_negative*: when True, the single-turn JSON response carries a
     "negative" member next to "positive"; both prompts are derived from the
-    user prompt in one request - no second LLM pass.
+    user prompt in one request - no second LLM pass. The negative prompt's
+    format follows *verbosity* (see _negative_format_rule).
+
+    *verbosity*: output verbosity level (see VERBOSITY_LEVELS). The level's
+    instruction block is injected into the system prompt, and the quality
+    gate's word floor is scaled to the level (see _effective_min_words).
 
     Interruptible at any point: checks ComfyUI's interrupt state while the server
     starts up and while generating. Raises InterruptProcessingException on interrupt.
@@ -691,11 +796,13 @@ def enhance_prompt(
     ready_time = time.monotonic()
     _print_safe(f"  [PromptEnhancer] Server ready in {ready_time - start:.1f}s. Model: {model_name}")
 
-    # Prepend the uncensored directive; append the runtime note so the LLM knows what it can see
-    effective_system_prompt = UNCENSORED_PREFIX + system_prompt + _enhance_json_instruction(generate_negative) + _vision_context_note(images)
+    # Prepend the uncensored directive; append the verbosity instruction, the JSON
+    # response instruction, and the runtime note so the LLM knows what it can see
+    effective_min_words = _effective_min_words(verbosity, min_words)
+    effective_system_prompt = UNCENSORED_PREFIX + system_prompt + _verbosity_instruction(verbosity) + _enhance_json_instruction(generate_negative, verbosity) + _vision_context_note(images)
 
     try:
-        best_result = _run_retry_loop(base_url, model_name, effective_system_prompt, user_prompt, images, max_retries, min_words, seed)
+        best_result = _run_retry_loop(base_url, model_name, effective_system_prompt, user_prompt, images, max_retries, effective_min_words, seed)
         positive_result, negative_result = _parse_enhancement_response(best_result)
         if not generate_negative:
             negative_result = None

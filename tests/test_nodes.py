@@ -316,3 +316,37 @@ def test_prompt_enhancer_has_negative_prompt_output():
 
     schema = PromptEnhancer.define_schema()
     assert [o.id for o in schema.outputs] == ["enhanced_prompt", "negative_prompt"]
+
+
+def test_node_execute_passes_preset_key_to_enhance(monkeypatch):
+    """execute() must pass the resolved preset key to enhance_prompt, so the
+    client can select the target model's specific negative-prompt rule."""
+    from pathlib import Path
+
+    import nodes
+    from llm_client import EnhancementResult
+    from presets import list_presets
+
+    info = next(p for p in list_presets() if p.key == "moss-image-sft-t2i")
+    captured = {}
+
+    def fake_enhance(**kwargs):
+        captured.update(kwargs)
+        return EnhancementResult("enhanced prompt", "blurry")
+
+    monkeypatch.setattr(nodes, "enhance_prompt", fake_enhance)
+
+    out = nodes.PromptEnhancer.execute(
+        prompt="a woman in the rain",
+        preset=info.display_name,
+        llm_model_path=str(Path(__file__).resolve()),
+        llama_server_path="llama-server",
+        ctx_size=20480,
+        seed=0,
+        max_retries=1,
+        min_words=10,
+    )
+
+    assert captured["preset_key"] == "moss-image-sft-t2i"
+    assert captured["system_prompt"] == nodes.load_preset("moss-image-sft-t2i")
+    assert out.result == ("enhanced prompt", "blurry")

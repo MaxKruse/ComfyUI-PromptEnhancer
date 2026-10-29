@@ -134,22 +134,27 @@ def _ensure_preset_options():
         _preset_display_names, _display_to_key = _build_preset_options()
 
 
-def _resolve_preset_key(preset_display: str) -> str | None:
-    """Resolve a preset display name to its internal key. Returns system prompt or None."""
+def _resolve_preset_key(preset_display: str) -> tuple[str | None, str | None]:
+    """Resolve a preset display name to (system prompt text, preset key).
+
+    Tries the dropdown display-name mapping, then the raw value as a preset
+    key, then the first preset alphabetically. Returns (None, None) when
+    nothing loads. The key is passed to enhance_prompt so the client can
+    select the target model's negative-prompt rule.
+    """
     _ensure_preset_options()
 
-    preset_key = preset_display
-    if _display_to_key and preset_display in _display_to_key:
-        preset_key = _display_to_key[preset_display]
-
+    preset_key = _display_to_key.get(preset_display, preset_display)
     system_prompt = load_preset(preset_key)
     if not system_prompt:
+        preset_key = preset_display
         system_prompt = load_preset(preset_display)
     if not system_prompt:
         default = get_default_preset()
         if default:
+            preset_key = default.key
             system_prompt = load_preset(default.key)
-    return system_prompt
+    return system_prompt, preset_key
 
 
 class PromptEnhancer(ComfyNode):
@@ -367,7 +372,7 @@ class PromptEnhancer(ComfyNode):
             return io.NodeOutput("", "")
 
         # Load preset system prompt
-        system_prompt = _resolve_preset_key(preset)
+        system_prompt, preset_key = _resolve_preset_key(preset)
         if not system_prompt:
             return io.NodeOutput(prompt, "")
 
@@ -401,6 +406,7 @@ class PromptEnhancer(ComfyNode):
             extra_flags=extra_server_args,
             generate_negative=generate_negative_prompt,
             verbosity=verbosity,
+            preset_key=preset_key,
         )
 
         return io.NodeOutput(result.positive if result.positive else prompt, result.negative or "")

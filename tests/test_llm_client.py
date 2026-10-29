@@ -754,3 +754,31 @@ def test_enhance_prompt_injects_verbosity_and_scales_gate(monkeypatch):
     assert "Output verbosity: MINIMAL" in turns[0]["system"]
     assert turns[0]["min_words"] == 8
     assert events == ["spawn", "turn", "kill"]
+
+
+def test_target_negative_rule_unknown_keys_return_none():
+    """_target_negative_rule must return None for a missing preset key and for
+    targets without a specific rule - such targets keep the generic negative
+    instructions."""
+    import llm_client
+
+    assert llm_client._target_negative_rule(None) is None
+    assert llm_client._target_negative_rule("") is None
+    assert llm_client._target_negative_rule("ltx2.3-10eros-i2v") is None
+    assert llm_client._target_negative_rule("krea2-t2i") is None
+
+
+def test_enhance_prompt_unknown_preset_key_keeps_generic_negative_rules(monkeypatch):
+    """A preset key without a per-target rule must leave the generic negative
+    instructions (failure modes + general quality negatives) untouched."""
+    import json
+
+    events, turns = _install_fake_enhance_environment(
+        monkeypatch,
+        json.dumps({"positive": "enhanced", "negative": "blurry"}),
+    )
+    _call_enhance(generate_negative=True, preset_key="ltx2.3-10eros-i2v")
+
+    assert "failure modes" in turns[0]["system"]
+    assert "quality negatives" in turns[0]["system"]
+    assert events == ["spawn", "turn", "kill"]

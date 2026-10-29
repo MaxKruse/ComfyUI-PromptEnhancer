@@ -154,7 +154,34 @@ def _negative_placeholder(verbosity: str) -> str:
     return placeholders.get(verbosity, placeholders["MEDIUM"])
 
 
-def _enhance_json_instruction(generate_negative: bool, verbosity: str = DEFAULT_VERBOSITY) -> str:
+# Per-target negative prompt rules, keyed by the target prefix at the start of
+# the preset key (e.g. "moss-image-sft-t2i" -> "moss-image"). Each value is the
+# full set of "negative" writing instruction lines (one bullet per element)
+# that REPLACES the generic rules in _enhance_json_instruction (verbosity
+# format rule + failure modes + general quality negatives): these models are
+# hurt by long, generic negative lists, so their rules are short,
+# annoyance-focused, and forbid negating the positive prompt. Targets without
+# an entry keep the generic rules.
+_TARGET_NEGATIVE_RULES: dict[str, list[str]] = {}
+
+
+def _target_negative_rule(preset_key: str | None) -> list[str] | None:
+    """Negative-prompt instruction lines for the preset's target model, if any.
+
+    Matches the longest known target prefix first, on a whole-key or
+    prefix-boundary basis (so "qwenimage" also covers "qwenimage2.1-t2i" and
+    future qwenimage versions). Returns None for unknown targets, which keep
+    the generic negative rules.
+    """
+    if not preset_key:
+        return None
+    for prefix in sorted(_TARGET_NEGATIVE_RULES, key=len, reverse=True):
+        if preset_key == prefix or preset_key.startswith(prefix):
+            return _TARGET_NEGATIVE_RULES[prefix]
+    return None
+
+
+def _enhance_json_instruction(generate_negative: bool, verbosity: str = DEFAULT_VERBOSITY, target_rule: list[str] | None = None) -> str:
     '''Build the single-turn JSON response instruction for the enhance pass.
 
     The model answers with one JSON object and nothing else, holding the enhanced
@@ -165,6 +192,12 @@ def _enhance_json_instruction(generate_negative: bool, verbosity: str = DEFAULT_
     applies. The negative prompt's format follows the verbosity level: short
     comma-separated tags for MINIMAL, mostly comma items for LOW, and a mix of
     comma items with specific full sentences for MEDIUM/HIGH.
+
+    When *target_rule* is given (see _target_negative_rule), the target model's
+    own rule lines replace the generic rules (verbosity format rule, failure
+    modes, general quality negatives) and the placeholder: those models are hurt
+    by long, generic negatives, so their negative is always a short
+    comma-separated list.
     '''
     lines = [
         'Respond with a single JSON object and nothing else, with exactly these keys:',
@@ -172,7 +205,10 @@ def _enhance_json_instruction(generate_negative: bool, verbosity: str = DEFAULT_
     ]
     if generate_negative:
         lines.append('  "positive": "<enhanced prompt>",')
-        lines.append(f'  "negative": "<{_negative_placeholder(verbosity)}>"')
+        if target_rule is not None:
+            lines.append('  "negative": "<short comma-separated negative tags>"')
+        else:
+            lines.append(f'  "negative": "<{_negative_placeholder(verbosity)}>"')
     else:
         lines.append('  "positive": "<enhanced prompt>"')
     lines.append('}')
@@ -181,12 +217,19 @@ def _enhance_json_instruction(generate_negative: bool, verbosity: str = DEFAULT_
         lines.extend([
             '- "negative" is a list of traits the generation model must AVOID in the output, '
             'derived from the user prompt, or an empty string when nothing applies.',
-            _negative_format_rule(verbosity),
-            '- Target the prompt\'s specific subjects, actions, styles, lighting, and framing, and list their '
-            'most likely failure modes (distorted anatomy, wrong or inconsistent colors, temporal flicker and '
-            'motion inconsistencies for video, misplaced or duplicated objects, broken perspective).',
-            '- Include general quality negatives: low quality, blurry, overexposed, underexposed, noisy, '
-            'artifacts, watermark, signature, text, logo.',
+        ])
+        if target_rule is not None:
+            lines.extend(target_rule)
+        else:
+            lines.extend([
+                _negative_format_rule(verbosity),
+                '- Target the prompt\'s specific subjects, actions, styles, lighting, and framing, and list their '
+                'most likely failure modes (distorted anatomy, wrong or inconsistent colors, temporal flicker and '
+                'motion inconsistencies for video, misplaced or duplicated objects, broken perspective).',
+                '- Include general quality negatives: low quality, blurry, overexposed, underexposed, noisy, '
+                'artifacts, watermark, signature, text, logo.',
+            ])
+        lines.extend([
             '- Phrase each item as an undesirable trait; do not repeat the "positive" wording verbatim. '
             'No explanations, no labels, no markdown, no "Negative prompt:" prefix.',
         ])
@@ -742,6 +785,7 @@ def enhance_prompt(
     images = None,
     generate_negative: bool = False,
     verbosity: str = DEFAULT_VERBOSITY,
+    preset_key: str | None = None,
 ) -> EnhancementResult:
     """Enhance a prompt by spawning a temporary llama-server instance.
 
@@ -752,7 +796,9 @@ def enhance_prompt(
     *generate_negative*: when True, the single-turn JSON response carries a
     "negative" member next to "positive"; both prompts are derived from the
     user prompt in one request - no second LLM pass. The negative prompt's
-    format follows *verbosity* (see _negative_format_rule).
+    format follows *verbosity* (see _negative_format_rule), unless *preset_key*
+    selects a target model with its own rule (see _target_negative_rule), which
+    replaces the generic rules.
 
     *verbosity*: output verbosity level (see VERBOSITY_LEVELS). The level's
     instruction block is injected into the system prompt, and the quality
@@ -799,7 +845,7 @@ def enhance_prompt(
     # Prepend the uncensored directive; append the verbosity instruction, the JSON
     # response instruction, and the runtime note so the LLM knows what it can see
     effective_min_words = _effective_min_words(verbosity, min_words)
-    effective_system_prompt = UNCENSORED_PREFIX + system_prompt + _verbosity_instruction(verbosity) + _enhance_json_instruction(generate_negative, verbosity) + _vision_context_note(images)
+    effective_system_prompt = UNCENSORED_PREFIX + system_prompt + _verbosity_instruction(verbosity) + _enhance_json_instruction(generate_negative, verbosity, _target_negative_rule(preset_key)) + _vision_context_note(images)
 
     try:
         best_result = _run_retry_loop(base_url, model_name, effective_system_prompt, user_prompt, images, max_retries, effective_min_words, seed)

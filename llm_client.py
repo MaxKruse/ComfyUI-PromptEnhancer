@@ -175,6 +175,18 @@ _TARGET_NEGATIVE_RULES: dict[str, list[str]] = {
         "so list only likely artifacts and annoyances - never the inverse of the requested style, medium, or "
         "subjects.",
     ],
+    "qwenimage": [
+        "- Target model Qwen-Image: write \"negative\" as short comma-separated items only - never full sentences.",
+        "- Start from the official Qwen-Image recommended list: low resolution, low quality, deformed limbs, "
+        "deformed fingers, oversaturated, wax-figure look, face without detail, over-smoothed, AI-looking, "
+        "chaotic composition, blurry text, distorted text. Drop items that clearly do not apply to this prompt.",
+        "- Add a category's items only when the prompt triggers them: people/portraits - extra fingers, fused "
+        "fingers, unnatural proportions; products/materials - fake materials, unrealistic reflections; in-image "
+        "text - misspelled text, garbled letters, overlapping characters; an unwanted overlay - watermark, logo.",
+        "- Keep the whole list at about fifteen items (well under 500 characters). Long negative lists "
+        "measurably hurt Qwen-Image: the positive prompt carries nearly all the steering, so list only likely "
+        "artifacts and annoyances - never the inverse of the requested style, medium, or subjects.",
+    ],
 }
 
 

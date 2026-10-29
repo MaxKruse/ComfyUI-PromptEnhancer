@@ -825,3 +825,53 @@ def test_enhance_prompt_moss_preset_uses_moss_negative_rule(monkeypatch):
     assert "failure modes" not in system
     assert "quality negatives" not in system
     assert events == ["spawn", "turn", "kill"]
+
+
+def test_target_negative_rule_qwenimage():
+    """Qwen-Image's rule must be the official 2512 recommended list (English
+    translation) plus category triggers for portraits, products, and in-image
+    text, an item cap, and the no-invert/short-list doctrine."""
+    import llm_client
+
+    lines = llm_client._target_negative_rule("qwenimage2.1-t2i")
+    assert lines is not None
+    rule = "\n".join(lines)
+    assert "Qwen-Image" in rule
+    # the official recommended list (Qwen-Image 2512 README, translated)
+    for token in (
+        "low resolution", "low quality", "deformed limbs", "deformed fingers",
+        "oversaturated", "wax-figure look", "face without detail",
+        "over-smoothed", "AI-looking", "chaotic composition",
+        "blurry text", "distorted text",
+    ):
+        assert token in rule
+    # category items are added only when the prompt triggers them
+    assert "extra fingers" in rule and "fused fingers" in rule
+    assert "fake materials" in rule
+    assert "misspelled text" in rule and "garbled letters" in rule
+    # plain items, a cap, and the no-invert doctrine
+    assert "comma-separated" in rule and "never full sentences" in rule
+    assert "fifteen" in rule
+    assert "inverse" in rule
+    # the i2i preset shares the same family rule
+    assert llm_client._target_negative_rule("qwenimage2.1-i2i") == lines
+
+
+def test_enhance_prompt_qwen_preset_uses_qwen_negative_rule(monkeypatch):
+    """A qwenimage preset key must put Qwen-Image's own negative rule into the
+    system prompt and drop the generic failure-mode/quality bullets."""
+    import json
+
+    events, turns = _install_fake_enhance_environment(
+        monkeypatch,
+        json.dumps({"positive": "enhanced", "negative": "low quality, deformed fingers"}),
+    )
+    _call_enhance(generate_negative=True, preset_key="qwenimage2.1-t2i")
+
+    system = turns[0]["system"]
+    assert "Qwen-Image" in system
+    assert "deformed fingers" in system and "wax-figure look" in system
+    # generic rules are replaced, not appended
+    assert "failure modes" not in system
+    assert "quality negatives" not in system
+    assert events == ["spawn", "turn", "kill"]

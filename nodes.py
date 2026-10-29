@@ -246,11 +246,15 @@ class PromptEnhancer(ComfyNode):
                     tooltip=(
                         "Also generate a negative prompt, requested in the SAME LLM turn as the "
                         "enhanced prompt (the model answers with one JSON object holding both). "
-                        "Derived from your prompt; targets its specific failure modes plus general "
-                        "quality negatives. Format follows the verbosity setting: short tags for "
-                        "MINIMAL, a mix of comma items and full sentences for MEDIUM/HIGH. "
-                        "Result is on the 'negative_prompt' output (empty when off)."
+                        "MOSS-Image and Qwen-Image use each model's own short, artifact-focused "
+                        "rules (official defaults; long negative lists measurably hurt these "
+                        "models). Other targets use the generic rules: the prompt's specific "
+                        "failure modes plus general quality negatives, with the format following "
+                        "the verbosity setting (short tags for MINIMAL, a mix of comma items and "
+                        "full sentences for MEDIUM/HIGH). Result is on the 'negative_prompt' "
+                        "output (empty when off)."
                     ),
+
                 ),
                 io.Combo.Input(
                     "verbosity",
@@ -339,7 +343,9 @@ class PromptEnhancer(ComfyNode):
                     display_name="negative_prompt",
                     tooltip=(
                         "The LLM-generated negative prompt, produced in the same turn as the enhanced "
-                        "prompt. Derived from your prompt; format follows the verbosity setting "
+                        "prompt. MOSS-Image and Qwen-Image use each model's own short, artifact-focused "
+                        "rules (official defaults); other targets use the prompt's failure modes plus "
+                        "general quality negatives, with the format following the verbosity setting "
                         "(short tags for MINIMAL, a mix of comma items and full sentences for "
                         "MEDIUM/HIGH). Empty when generate_negative_prompt is off."
                     ),

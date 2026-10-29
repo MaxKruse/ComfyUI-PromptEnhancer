@@ -23,7 +23,7 @@ Drop this into your `custom_nodes/` directory. No API keys needed - runs entirel
 - **Seeded sampling**: The seed is sent to the LLM per request; each retry attempt uses the next seed value, so retries produce genuinely different output
 - **Dynamic reference images**: Connect 0-9 reference images via Autogrow slots (requires a multimodal GGUF + `--mmproj` flag)
 - **Vision-aware prompting**: The system prompt tells the LLM at runtime whether the reference images are actually visible - with images it grounds the anchor in what the frame shows, without them it anchors only on what you wrote, so a forgotten mmproj cannot make it invent frame details
-- **Negative prompt (on by default)**: The same LLM turn also derives a negative prompt - the model answers with one JSON object holding both prompts, so one request, one server spawn, no extra pass. Its format follows the verbosity setting (see below); can be toggled off
+- **Negative prompt (on by default)**: The same LLM turn also derives a negative prompt - the model answers with one JSON object holding both prompts, so one request, one server spawn, no extra pass. MOSS-Image and Qwen-Image use each model's own short, official-based rules (long negative lists measurably hurt them); other targets' format follows the verbosity setting (see below); can be toggled off
 - **Verbosity control**: `MINIMAL` (almost booru-tag-like), `LOW` (slight improvement), `MEDIUM` (normal procedure, default), `HIGH` (extreme creativity - 3 options per scene aspect picked in an alternating A-B-C pattern). The quality-gate word floor follows the level (see below)
 - **Bypass-safe**: When the node is disabled/bypassed, the original prompt passes through unchanged
 - **Workflow persistence**: Enhanced prompt values are saved in the workflow JSON and preserved across sessions
@@ -90,11 +90,16 @@ Prompt enhancement with retry loop.
 
 ### Negative Prompt Generation
 
-`generate_negative_prompt` is **on by default**: the same LLM turn that enhances your prompt also derives a negative prompt. Instead of a plain-text answer, the model is instructed to respond with a single JSON object (`{"positive": ..., "negative": ...}`), so the whole enhancement - positive and negative together - takes one request and one `llama-server` spawn/kill cycle. The negative is derived from your prompt and targets the specific subjects, styles, and failure modes of your prompt, plus general quality negatives. Its format follows the **verbosity** setting: booru-like short tags for `MINIMAL` (no full sentences), mostly a comma-separated list for `LOW`, a mix of comma-separated short items and specific full sentences for `MEDIUM`, and specific full sentences plus a comma-separated cluster of general quality negatives for `HIGH`. When the turn fails, both outputs fall back (original `prompt`, empty `negative_prompt`). A refusal in the negative member is discarded - you get an empty `negative_prompt`, never a refusal. Wire `negative_prompt` into your sampler's negative prompt input (or a CLIP Text Encode for the negative).
+`generate_negative_prompt` is **on by default**: the same LLM turn that enhances your prompt also derives a negative prompt. Instead of a plain-text answer, the model is instructed to respond with a single JSON object (`{"positive": ..., "negative": ...}`), so the whole enhancement - positive and negative together - takes one request and one `llama-server` spawn/kill cycle. When the turn fails, both outputs fall back (original `prompt`, empty `negative_prompt`). A refusal in the negative member is discarded - you get an empty `negative_prompt`, never a refusal. Wire `negative_prompt` into your sampler's negative prompt input (or a CLIP Text Encode for the negative).
+
+How the negative is written depends on the preset's target model:
+
+- **MOSS-Image** and **Qwen-Image** presets use each model's own short, artifact-focused rule. Both are measurably hurt by long, generic negative lists - the positive prompt carries nearly all the steering, so the negative must never be the inverse of what the positive asks for. MOSS-Image: plain comma-separated tags starting from the official default (`nsfw, worst quality, bad anatomy, watermark, jpeg artifact`; the `nsfw` tag is dropped for NSFW prompts), plus at most a few prompt-specific annoyance tags (garbled in-image text, deformed hands when people are depicted, duplicated objects) - about ten tags max. Qwen-Image: short comma-separated items starting from the official recommended list (low resolution, low quality, deformed limbs/fingers, oversaturated, wax-figure look, face without detail, over-smoothed, AI-looking, chaotic composition, blurry/distorted text), plus category items only when the prompt triggers them (people: extra/fused fingers, unnatural proportions; products: fake materials, unrealistic reflections; in-image text: misspelled text, garbled letters, overlapping characters) - about fifteen items max. Verbosity does not change these rules: the negative stays short at every level.
+- **All other targets** use the generic rules: the negative is derived from your prompt and targets the specific subjects, styles, and failure modes of your prompt, plus general quality negatives. Its format follows the **verbosity** setting: booru-like short tags for `MINIMAL` (no full sentences), mostly a comma-separated list for `LOW`, a mix of comma-separated short items and specific full sentences for `MEDIUM`, and specific full sentences plus a comma-separated cluster of general quality negatives for `HIGH`.
 
 ### Verbosity
 
-The `verbosity` dropdown controls how much detail the enhanced prompt (and the negative prompt) contains:
+The `verbosity` dropdown controls how much detail the enhanced prompt contains (and the negative prompt's format for targets without their own rule):
 
 | Level | Behavior |
 |-------|----------|
@@ -103,7 +108,7 @@ The `verbosity` dropdown controls how much detail the enhanced prompt (and the n
 | `MEDIUM` | The normal procedure: a full expansion into the target model's preferred style (default). Word floor unchanged (the `min_words` input). |
 | `HIGH` | Extreme creativity: for every aspect of the scene (subject, action, setting, lighting, camera, style, mood, ...) the LLM drafts three distinct creative options (A, B, C) and picks one per aspect in an alternating A-B-C-A-B-C pattern, so no single option's style dominates. Word floor raised to at least 100. |
 
-The instruction block is appended to the preset's system prompt, so it works with every preset. The negative prompt format follows the same level (see above).
+The instruction block is appended to the preset's system prompt, so it works with every preset. The negative prompt format follows the same level (see above) - except MOSS-Image and Qwen-Image, whose negative rules are model-specific and always stay short (see Negative Prompt Generation).
 
 ## Presets
 

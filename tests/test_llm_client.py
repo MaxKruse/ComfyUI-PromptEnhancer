@@ -782,3 +782,46 @@ def test_enhance_prompt_unknown_preset_key_keeps_generic_negative_rules(monkeypa
     assert "failure modes" in turns[0]["system"]
     assert "quality negatives" in turns[0]["system"]
     assert events == ["spawn", "turn", "kill"]
+
+
+def test_target_negative_rule_moss_image():
+    """MOSS-Image's rule must be the official default tag list with the nsfw
+    exclusion, plain comma-separated tags only, a small prompt-specific
+    allowance, and the no-invert/short-list doctrine (official USERGUIDE plus
+    community: long generic lists hurt MOSS-Image)."""
+    import llm_client
+
+    lines = llm_client._target_negative_rule("moss-image-sft-t2i")
+    assert lines is not None
+    rule = "\n".join(lines)
+    assert "MOSS-Image" in rule
+    # the official default negative, verbatim
+    assert "nsfw, worst quality, bad anatomy, watermark, jpeg artifact" in rule
+    # nsfw must be omitted for NSFW requests
+    assert "NSFW" in rule
+    # plain tags, never sentences
+    assert "comma-separated" in rule and "never full sentences" in rule
+    # a cap keeps the list short
+    assert "ten" in rule
+    # the negative must never invert the positive
+    assert "inverse" in rule
+
+
+def test_enhance_prompt_moss_preset_uses_moss_negative_rule(monkeypatch):
+    """A moss-image preset key must put MOSS-Image's own negative rule into the
+    system prompt and drop the generic failure-mode/quality bullets."""
+    import json
+
+    events, turns = _install_fake_enhance_environment(
+        monkeypatch,
+        json.dumps({"positive": "enhanced", "negative": "worst quality, bad anatomy"}),
+    )
+    _call_enhance(generate_negative=True, preset_key="moss-image-sft-t2i")
+
+    system = turns[0]["system"]
+    assert "MOSS-Image" in system
+    assert "nsfw, worst quality, bad anatomy, watermark, jpeg artifact" in system
+    # generic rules are replaced, not appended
+    assert "failure modes" not in system
+    assert "quality negatives" not in system
+    assert events == ["spawn", "turn", "kill"]

@@ -162,7 +162,20 @@ def _negative_placeholder(verbosity: str) -> str:
 # hurt by long, generic negative lists, so their rules are short,
 # annoyance-focused, and forbid negating the positive prompt. Targets without
 # an entry keep the generic rules.
-_TARGET_NEGATIVE_RULES: dict[str, list[str]] = {}
+_TARGET_NEGATIVE_RULES: dict[str, list[str]] = {
+    "moss-image": [
+        "- Target model MOSS-Image: write \"negative\" as plain comma-separated tags only - never full sentences.",
+        '- Start from the official MOSS-Image default: nsfw, worst quality, bad anatomy, watermark, jpeg artifact. '
+        'Omit the "nsfw" tag when the user prompt requests adult/NSFW content.',
+        "- Add at most a few prompt-specific annoyance tags, only when the prompt makes them likely: garbled or "
+        "misspelled in-image text when text is requested, extra fingers or deformed hands only when people are "
+        "depicted, duplicated or misplaced objects, a wrong count of named items. Keep the whole list at about "
+        "ten tags or fewer.",
+        "- Long negative lists measurably hurt MOSS-Image: the positive prompt carries nearly all the steering, "
+        "so list only likely artifacts and annoyances - never the inverse of the requested style, medium, or "
+        "subjects.",
+    ],
+}
 
 
 def _target_negative_rule(preset_key: str | None) -> list[str] | None:

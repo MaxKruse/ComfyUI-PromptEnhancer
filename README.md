@@ -1,5 +1,15 @@
 # ComfyUI Prompt Enhancer
 
+> **Deprecated.** This node is superseded by
+> **[ComfyUI-LlamaServer-Helpers](https://github.com/MaxKruse/ComfyUI-LlamaServer-Helpers)**,
+> which is the new way. This node still loads and works, but new work should use the
+> new node group instead: a **Load LLM Server** node starts **one shared, warm-cached**
+> `llama-server` and hands out a connection, and the prompt enhancer (plus a generic
+> **LLM Prompt** and a **Rules Checker**) all consume that single connection. The
+> practical win: the model loads once and is reused across the run, instead of being
+> cold-started on every queue item. Install it the same way - drop the
+> `ComfyUI-LlamaServer-Helpers` folder into `custom_nodes/` and restart ComfyUI.
+
 LLM-powered prompt enhancement using [llama.cpp](https://github.com/ggerganov/llama.cpp)'s `llama-server` HTTP API.
 
 Drop this into your `custom_nodes/` directory. No API keys needed - runs entirely local.
